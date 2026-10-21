@@ -555,7 +555,7 @@ bot.action(/START_TASK_(.+)/, async (ctx) => {
 bot.action(/WITHDRAW_(.+)/, async (ctx) => ctx.scene.enter('WITHDRAW_WIZARD', { userId: ctx.match[1] }));
 
 // ==========================================
-// ৮. Admin Panel System (Reorganized & Updated)
+// ৮. Admin Panel System 
 // ==========================================
 function getAdminMenu() {
     return { inline_keyboard: [
@@ -660,68 +660,75 @@ bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
     if (tasks.length === 0) return ctx.answerCbQuery('কোনো লাইভ টাস্ক নেই!', { show_alert: true });
-    let btns = tasks.map(t => [{ text: `📋 ${t.name}`, callback_data: `ADMIN_VTM_${t._id}`, style: 'primary' }]); // Changed callback to avoid overlap
+    let btns = tasks.map(t => [{ text: `📋 ${t.name}`, callback_data: `ADMIN_VTM_${t._id}`, style: 'primary' }]); 
     btns.push([{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'danger' }]);
     ctx.editMessageText('📋 **কোন টাস্কের ডাটা ডাউনলোড করতে চান তা সিলেক্ট করুন:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
 });
 
-// Fixed Overlapping Action Prefix
 bot.action(/ADMIN_VTM_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
     ctx.editMessageText(`📋 **View Task:** ${task.name}\n\nকীভাবে ডাটা ডাউনলোড করতে চান?`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
-        [{ text: '✅ Complete Today', callback_data: `ADMIN_VT_CT_${task._id}`, style: 'success' }],
-        [{ text: '📥 Download Live Task', callback_data: `ADMIN_VT_ALL_${task._id}`, style: 'primary' }],
+        [{ text: '✅ Complete Today', callback_data: `ADMIN_VTX_CT_${task._id}`, style: 'success' }],
+        [{ text: '📥 Download Live Task', callback_data: `ADMIN_VTX_ALL_${task._id}`, style: 'primary' }],
         [{ text: '🔙 Back', callback_data: 'ADMIN_VIEW_TASKS', style: 'danger' }]
     ]}});
 });
 
 async function exportTasksToExcel(ctx, taskId, completeToday) {
-    const task = await Task.findById(taskId);
-    if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
-    
-    let query = { activeTaskId: taskId.toString() };
-    if (completeToday) {
-        let startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
-        let endOfDay = new Date(); endOfDay.setHours(23,59,59,999);
-        query.time = { $gte: startOfDay, $lt: endOfDay };
-    }
-    
-    const submissions = await Submission.find(query);
-    if (submissions.length === 0) return ctx.reply("⚠️ No Pending Task");
+    try {
+        const task = await Task.findById(taskId);
+        if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
+        
+        let query = { activeTaskId: taskId.toString() };
+        if (completeToday) {
+            let startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+            let endOfDay = new Date(); endOfDay.setHours(23,59,59,999);
+            query.time = { $gte: startOfDay, $lt: endOfDay };
+        }
+        
+        const submissions = await Submission.find(query);
+        if (submissions.length === 0) {
+            await ctx.answerCbQuery();
+            return ctx.reply("No Pending Task");
+        }
 
-    await ctx.reply("⏳ এক্সেল ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
-    let exportData = [];
-    let isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
-    
-    for (let sub of submissions) {
-        let row = {};
-        if (isFB) row['UID'] = sub.fbUid || 'N/A';
-        else row['Username'] = sub.username || sub.generatedEmail || 'N/A';
+        await ctx.reply("⏳ এক্সেল ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
+        let exportData = [];
+        let isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
         
-        row['Password'] = sub.password || 'N/A';
-        if (task.is2FA) row['2FA'] = sub.secret2fa || 'N/A';
-        if (task.isCookie) row['Cookies'] = sub.cookie || 'N/A';
-        row['Task ID'] = sub.taskId;
+        for (let sub of submissions) {
+            let row = {};
+            if (isFB) row['UID'] = sub.fbUid || 'N/A';
+            else row['Username'] = sub.username || sub.generatedEmail || 'N/A';
+            
+            row['Password'] = sub.password || 'N/A';
+            if (task.is2FA) row['2FA'] = sub.secret2fa || 'N/A';
+            if (task.isCookie) row['Cookies'] = sub.cookie || 'N/A';
+            row['Task ID'] = sub.taskId;
+            
+            exportData.push(row);
+        }
         
-        exportData.push(row);
+        const ws = xlsx.utils.json_to_sheet(exportData);
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, ws, "Tasks");
+        const buffer = Buffer.from(xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+        
+        let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
+        await ctx.replyWithDocument({ source: buffer, filename: fileName }, { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' });
+    } catch (err) {
+        console.error("Export Error:", err);
+        ctx.reply("❌ ফাইল ডাউনলোড করতে সমস্যা হয়েছে।");
     }
-    
-    const ws = xlsx.utils.json_to_sheet(exportData);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, "Tasks");
-    const buffer = Buffer.from(xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-    
-    let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
-    await ctx.replyWithDocument({ source: buffer, filename: fileName }, { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' });
 }
 
-bot.action(/ADMIN_VT_CT_(.+)/, async (ctx) => {
+bot.action(/ADMIN_VTX_CT_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return; await ctx.answerCbQuery();
     await exportTasksToExcel(ctx, ctx.match[1], true);
 });
 
-bot.action(/ADMIN_VT_ALL_(.+)/, async (ctx) => {
+bot.action(/ADMIN_VTX_ALL_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return; await ctx.answerCbQuery();
     await exportTasksToExcel(ctx, ctx.match[1], false);
 });
