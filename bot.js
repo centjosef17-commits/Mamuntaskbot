@@ -101,7 +101,7 @@ const langDB = {
         withdraw_amt: 'টাকার পরিমাণ লিখুন (৳):',
         invalid_amt: 'দয়া করে সঠিক এমাউন্ট দিন।',
         low_bal: '❌ আপনার পর্যাপ্ত ব্যালেন্স নেই!',
-        withdraw_receipt: (method, acc, amt, fee, net) => `✅ **উইথড্র রিকোয়েস্ট সাবমিট হয়েছে!**\n━━━━━━━━━━━━━━━━━━━━\n💳 **মেথড:** ${method}\n🏦 **একাউন্ট:** \`${acc}\`\n\n💰 **রিকোয়েস্ট এমাউন্ট:** ৳${amt}\n➖ **পেমেন্ট ফি:** ৳${fee}\n🎁 **আপনি রিসিভ করবেন:** ৳${net}\n━━━━━━━━━━━━━━━━━━━━`,
+        withdraw_receipt: (method, acc, amt, fee, net) => `✅ **উইথড্র রিকোয়েস্ট সাবমিট হয়েছে!**\n━━━━━━━━━━━━━━━━━━━━\n💳 **Method:** ${method}\n🏦 **Account:** \`${acc}\`\n\n💰 **Request Amount:** ৳${amt}\n➖ **Payment Fee:** ৳${fee}\n🎁 **You Will Receive:** ৳${net}\n━━━━━━━━━━━━━━━━━━━━`,
         force_join: '⚠️ **Bot ব্যবহার করতে হলে আগে আমাদের চ্যানেলে জয়েন করুন!**'
     },
     en: {
@@ -263,9 +263,16 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
         
         let detailsText = '';
         const lowerType = task.type ? task.type.toLowerCase() : '';
-        if (['ig', 'instagram', 'twitter', 'tiktok'].includes(lowerType)) detailsText = langDB[lang].details_ig_tw(fakeUser.firstName, fakeUser.username, task.password || 'Taskesy123@');
-        else if (['fb', 'facebook'].includes(lowerType)) detailsText = langDB[lang].details_fb(fakeUser.firstName, fakeUser.lastName, task.password || 'Taskesy123@');
-        else detailsText = langDB[lang].details_fb_gm(fakeUser.firstName, fakeUser.lastName, fakeUser.email, task.password || 'Taskesy123@');
+        
+        if (lowerType === 'tiktok') {
+            detailsText = `Name: \`${fakeUser.firstName} ${fakeUser.lastName}\`\nUsername: \`${fakeUser.username}\`\nPassword: \`${task.password || 'Taskesy123@'}\``;
+        } else if (['ig', 'instagram', 'twitter'].includes(lowerType)) {
+            detailsText = langDB[lang].details_ig_tw(fakeUser.firstName, fakeUser.username, task.password || 'Taskesy123@');
+        } else if (['fb', 'facebook'].includes(lowerType)) {
+            detailsText = langDB[lang].details_fb(fakeUser.firstName, fakeUser.lastName, task.password || 'Taskesy123@');
+        } else {
+            detailsText = langDB[lang].details_fb_gm(fakeUser.firstName, fakeUser.lastName, fakeUser.email, task.password || 'Taskesy123@');
+        }
         
         ctx.scene.session.steps = [];
         if (task.isUID) ctx.scene.session.steps.push('uid'); 
@@ -653,12 +660,13 @@ bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
     if (tasks.length === 0) return ctx.answerCbQuery('কোনো লাইভ টাস্ক নেই!', { show_alert: true });
-    let btns = tasks.map(t => [{ text: `📋 ${t.name}`, callback_data: `ADMIN_VT_${t._id}`, style: 'primary' }]);
+    let btns = tasks.map(t => [{ text: `📋 ${t.name}`, callback_data: `ADMIN_VTM_${t._id}`, style: 'primary' }]); // Changed callback to avoid overlap
     btns.push([{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'danger' }]);
     ctx.editMessageText('📋 **কোন টাস্কের ডাটা ডাউনলোড করতে চান তা সিলেক্ট করুন:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
 });
 
-bot.action(/ADMIN_VT_(.+)/, async (ctx) => {
+// Fixed Overlapping Action Prefix
+bot.action(/ADMIN_VTM_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
     ctx.editMessageText(`📋 **View Task:** ${task.name}\n\nকীভাবে ডাটা ডাউনলোড করতে চান?`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
