@@ -65,7 +65,7 @@ const langDB = {
         return_home: '🔙 রিটার্ন to হোম', submit_btn: 'Submit', cancel: '❌ Cancel', start_btn: '▶️ Start',
         no_tasks: 'এই মুহূর্তে কোনো টাস্ক চালু নেই।', select_task: 'নিচের তালিকা থেকে একটি টাস্ক নির্বাচন করুন:',
         profile: (name, date, app, rej, pend, proc, earn) => `👤 **প্রোফাইল ইনফরমেশন**\n━━━━━━━━━━━━━━━━━━━━\n📛 **নাম:** ${name}\n📅 **জয়েন ডেট:** ${date}\n\n📊 **আপনার স্ট্যাটাস:**\n✅ **Approved:** \`${app}\` টি\n❌ **Rejected:** \`${rej}\` টি\n⏳ **Pending:** \`${pend}\` টি\n🔄 **Processing:** \`${proc}\` টি\n\n💵 **মোট আয়:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
-        top_title: '🏆 **রিয়ে-টাইম লিডারবোর্ড (Top 10)**\n━━━━━━━━━━━━━━━━━━━━\n\n', top_empty: 'এখনও কোনো লিডারবোর্ড ডেটা নেই।',
+        top_title: '🏆 **রিয়েল-টাইম লিডারবোর্ড (Top 10)**\n━━━━━━━━━━━━━━━━━━━━\n\n', top_empty: 'এখনও কোনো লিডারবোর্ড ডেটা নেই।',
         ref_text: (link, count, earn) => `🎁 **রেফারেল প্রোগ্রাম**\n━━━━━━━━━━━━━━━━━━━━\nআপনার লিংক দিয়ে বন্ধুদের ইনভাইট করে এক্সট্রা কমিশন আয় করুন!\n\n🔗 **আপনার রেফার লিংক:**\n\`${link}\`\n\n👥 **মোট রেফার:** \`${count}\` জন\n💰 **রেফার থেকে আয়:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
         task_intro: (name, price, rules) => `⏳ Review time: 24 hours ⏳\n\n📋 Task: ${name} (৳${price})\n📄 Description: 📌 ${rules}\n✍️ Report instruction:\n.\n\n⏳ Review time: 24 hours ⏳`,
         details_ig_tw: (fName, uName, pass) => `First name: \`${fName}\`\nLogin: \`${uName}\`\nPassword: \`${pass}\``,
@@ -144,8 +144,17 @@ async function getLang(ctx) {
     return 'bn';
 }
 
-function getMainMenu(lang) {
-    return { keyboard: [[ { text: langDB[lang].menu_wallet }, { text: langDB[lang].menu_tasks } ], [ { text: langDB[lang].menu_profile } ], [ { text: langDB[lang].menu_referral }, { text: langDB[lang].menu_top } ], [ { text: langDB[lang].menu_lang } ]], resize_keyboard: true };
+const checkAdmin = (ctx) => ctx.from?.id?.toString() === process.env.ADMIN_ID;
+
+function getMainMenu(lang, isAdmin = false) {
+    const keyboard = [
+        [ { text: langDB[lang].menu_wallet, style: 'success' }, { text: langDB[lang].menu_tasks, style: 'primary' } ],
+        [ { text: langDB[lang].menu_profile, style: 'primary' } ],
+        [ { text: langDB[lang].menu_referral, style: 'primary' }, { text: langDB[lang].menu_top, style: 'primary' } ],
+        [ { text: langDB[lang].menu_lang, style: 'primary' } ]
+    ];
+    if (isAdmin) keyboard.push([{ text: '👑 Admin Panel', style: 'danger' }]); // Bottom bar Admin Button
+    return { keyboard, resize_keyboard: true };
 }
 
 // ==========================================
@@ -167,7 +176,7 @@ bot.use(async (ctx, next) => {
             if (['member', 'administrator', 'creator'].includes(member.status)) return next();
             else {
                 const lang = await getLang(ctx);
-                return ctx.reply(langDB[lang].force_join, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📢 Channel', url: `https://t.me/${CHANNEL_USERNAME.replace('@', '')}` }], [{ text: '✅ Joined', callback_data: 'check_join' }]] } });
+                return ctx.reply(langDB[lang].force_join, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '📢 Channel', url: `https://t.me/${CHANNEL_USERNAME.replace('@', '')}` }], [{ text: '✅ Joined', callback_data: 'check_join', style: 'success' }]] } });
             }
         } catch (e) { return next(); }
     }
@@ -181,7 +190,7 @@ async function showTasks(ctx) {
     const lang = await getLang(ctx);
     const tasks = await Task.find({ status: 'active' });
     if (tasks.length === 0) return ctx.reply(langDB[lang].no_tasks);
-    let buttons = tasks.map(t => [{ text: `⚡ ${t.name} - ৳${t.price}`, callback_data: `VIEW_TASK_${t._id}` }]);
+    let buttons = tasks.map(t => [{ text: `⚡ ${t.name} - ৳${t.price}`, callback_data: `VIEW_TASK_${t._id}`, style: 'primary' }]);
     ctx.reply(langDB[lang].select_task, { reply_markup: { inline_keyboard: buttons } });
 }
 
@@ -194,7 +203,7 @@ async function showWallet(ctx) {
     let pendingWithdraw = 0, successWithdraw = 0;
     withdrawals.forEach(w => { if (w.status === 'pending') pendingWithdraw += parseFloat(w.amount || 0); else if (w.status === 'approved') successWithdraw += parseFloat(w.amount || 0); });
     const walletText = lang === 'bn' ? `💰 **আপনার ওয়ালেট**\n━━━━━━━━━━━━━━━━━━━━\n💵 **মেইন ব্যালেন্স:** \`৳${earned}\`\n\n⏳ **উইথড্র পেন্ডিং:** \`৳${pendingWithdraw.toFixed(2)}\`\n✅ **মোট উইথড্র (সাকসেস):** \`৳${successWithdraw.toFixed(2)}\`\n━━━━━━━━━━━━━━━━━━━━` : `💰 **Your Wallet**\n━━━━━━━━━━━━━━━━━━━━\n💵 **Main Balance:** \`৳${earned}\`\n\n⏳ **Pending Withdrawal:** \`৳${pendingWithdraw.toFixed(2)}\`\n✅ **Total Success Withdrawal:** \`৳${successWithdraw.toFixed(2)}\`\n━━━━━━━━━━━━━━━━━━━━`;
-    ctx.reply(walletText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: lang === 'bn' ? '💸 উইথড্র করুন' : '💸 Withdraw', callback_data: `WITHDRAW_${u._id}` }]] } });
+    ctx.reply(walletText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: lang === 'bn' ? '💸 উইথড্র করুন' : '💸 Withdraw', callback_data: `WITHDRAW_${u._id}`, style: 'primary' }]] } });
 }
 
 async function showProfile(ctx) {
@@ -241,7 +250,7 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
         ctx.scene.session.collected = { uid: '', secret2fa: '', cookie: '' };
         const sentMsg = await ctx.reply(detailsText, { parse_mode: 'Markdown', reply_markup: { remove_keyboard: true } });
         ctx.scene.session.taskMessageId = sentMsg.message_id;
-        ctx.scene.session.timeoutId = setTimeout(async () => { try { await bot.telegram.deleteMessage(ctx.chat.id, sentMsg.message_id).catch(()=>{}); await bot.telegram.sendMessage(ctx.chat.id, langDB[lang].task_expired, { reply_markup: getMainMenu(lang) }).catch(()=>{}); if (ctx.session) ctx.session.__scenes = {}; } catch(e) {} }, 10 * 60 * 1000);
+        ctx.scene.session.timeoutId = setTimeout(async () => { try { await bot.telegram.deleteMessage(ctx.chat.id, sentMsg.message_id).catch(()=>{}); await bot.telegram.sendMessage(ctx.chat.id, langDB[lang].task_expired, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }).catch(()=>{}); if (ctx.session) ctx.session.__scenes = {}; } catch(e) {} }, 10 * 60 * 1000);
         return askNextRequirement(ctx, lang); 
     },
     async (ctx) => {
@@ -250,7 +259,7 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
         const lang = await getLang(ctx);
         if (Date.now() - ctx.scene.session.startTime > 10 * 60 * 1000) { if (ctx.scene.session.timeoutId) clearTimeout(ctx.scene.session.timeoutId); return; }
         const menuCommands = [langDB.bn.menu_tasks, langDB.en.menu_tasks, langDB.bn.menu_wallet, langDB.en.menu_wallet, langDB.bn.menu_profile, langDB.en.menu_profile, langDB.bn.menu_top, langDB.en.menu_top, langDB.bn.menu_referral, langDB.en.menu_referral, langDB.bn.cancel, langDB.en.cancel, '/cancel'];
-        if (menuCommands.includes(text)) { if (ctx.scene.session.timeoutId) clearTimeout(ctx.scene.session.timeoutId); await ctx.reply(langDB[lang].task_cancelled, { reply_markup: getMainMenu(lang) }); return ctx.scene.leave(); }
+        if (menuCommands.includes(text)) { if (ctx.scene.session.timeoutId) clearTimeout(ctx.scene.session.timeoutId); await ctx.reply(langDB[lang].task_cancelled, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); return ctx.scene.leave(); }
         if (text === langDB.bn.submit_btn || text === langDB.en.submit_btn) {
             if (ctx.scene.session.timeoutId) clearTimeout(ctx.scene.session.timeoutId);
             if (ctx.scene.session.steps.length > 0) return ctx.reply(langDB[lang].missing_info);
@@ -260,7 +269,7 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
                 const sub = new Submission({ taskId: generatedTaskId, activeTaskId: tData._id.toString(), taskName: tData.name, taskType: tData.type, username: fUser.username || "", firstName: fUser.firstName || "", lastName: fUser.lastName || "", fullName: `${fUser.firstName}${fUser.lastName}`, generatedEmail: fUser.email || "", password: tData.password || "Taskesy123@", fbUid: col.uid || "", secret2fa: col.secret2fa || "", cookie: col.cookie || "", recoveryMail: tData.recoveryMail || "", submittedBy: ctx.from.id.toString(), uid: uId, price: tData.price });
                 await sub.save(); await User.findByIdAndUpdate(uId, { $inc: { pending: 1 } });
                 if (ctx.scene.session.taskMessageId) ctx.telegram.deleteMessage(ctx.chat.id, ctx.scene.session.taskMessageId).catch(()=>{});
-                ctx.reply(langDB[lang].task_success, { reply_markup: getMainMenu(lang) });
+                ctx.reply(langDB[lang].task_success, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) });
             } catch(e) { console.error(e); }
             return ctx.scene.leave();
         }
@@ -274,7 +283,7 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
                 ctx.scene.session.collected.cookie = text; ctx.scene.session.steps.shift(); await ctx.reply(langDB[lang].acc_cookie);
             }
             else if (currentStep === '2fa') {
-                try { let totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(text.replace(/\s+/g, '').toUpperCase()) }); let token = totp.generate(); ctx.scene.session.collected.secret2fa = text; ctx.scene.session.steps.shift(); await ctx.reply(langDB[lang].acc_2fa(), { reply_markup: { inline_keyboard: [[{ text: `📋 ${token}`, copy_text: { text: token } }]] } }); } catch(e) { return ctx.reply(langDB[lang].wrong_2fa); }
+                try { let totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(text.replace(/\s+/g, '').toUpperCase()) }); let token = totp.generate(); ctx.scene.session.collected.secret2fa = text; ctx.scene.session.steps.shift(); await ctx.reply(langDB[lang].acc_2fa(), { reply_markup: { inline_keyboard: [[{ text: `📋 ${token}`, copy_text: { text: token }, style: 'primary' }]] } }); } catch(e) { return ctx.reply(langDB[lang].wrong_2fa); }
             }
             else if (currentStep === 'uid') { if (text.length < 4) return ctx.reply(langDB[lang].wrong_uid); ctx.scene.session.collected.uid = text; ctx.scene.session.steps.shift(); await ctx.reply(langDB[lang].acc_uid); }
             return askNextRequirement(ctx, lang);
@@ -283,62 +292,61 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
 );
 
 async function askNextRequirement(ctx, lang) {
-    const steps = ctx.scene.session.steps; const kbd = { keyboard: [[{ text: langDB[lang].cancel }]], resize_keyboard: true };
+    const steps = ctx.scene.session.steps; const kbd = { keyboard: [[{ text: langDB[lang].cancel, style: 'danger' }]], resize_keyboard: true };
     if (steps.length > 0) {
         const next = steps[0];
         if (next === 'uid') await ctx.reply(langDB[lang].uid_prompt, { reply_markup: kbd }); else if (next === '2fa') await ctx.reply(langDB[lang].tfa_prompt, { reply_markup: kbd }); else if (next === 'cookie') await ctx.reply(langDB[lang].cookie_prompt, { reply_markup: kbd });
         ctx.wizard.selectStep(1); 
-    } else { await ctx.reply(langDB[lang].all_set, { reply_markup: { keyboard: [[{ text: langDB[lang].submit_btn }], [{ text: langDB[lang].cancel }]], resize_keyboard: true }, parse_mode: 'Markdown' }); ctx.wizard.selectStep(1); }
+    } else { await ctx.reply(langDB[lang].all_set, { reply_markup: { keyboard: [[{ text: langDB[lang].submit_btn, style: 'success' }], [{ text: langDB[lang].cancel, style: 'danger' }]], resize_keyboard: true }, parse_mode: 'Markdown' }); ctx.wizard.selectStep(1); }
 }
 
 const withdrawWizard = new Scenes.WizardScene('WITHDRAW_WIZARD',
     async (ctx) => {
         const lang = await getLang(ctx); ctx.scene.session.lang = lang;
-        ctx.reply(langDB[lang].withdraw_prompt, { reply_markup: { inline_keyboard: [[{ text: 'bKash', callback_data: 'bkash' }, { text: 'Nagod', callback_data: 'nagod' }], [{ text: 'Binance', callback_data: 'binance' }], [{ text: '❌ Cancel', callback_data: 'cancel' }]] } });
+        ctx.reply(langDB[lang].withdraw_prompt, { reply_markup: { inline_keyboard: [[{ text: 'bKash', callback_data: 'bkash', style: 'primary' }, { text: 'Nagod', callback_data: 'nagod', style: 'primary' }], [{ text: 'Binance', callback_data: 'binance', style: 'primary' }], [{ text: '❌ Cancel', callback_data: 'cancel', style: 'danger' }]] } });
         return ctx.wizard.next();
     },
     async (ctx) => {
         const lang = ctx.scene.session.lang;
         if (ctx.callbackQuery) {
             const method = ctx.callbackQuery.data;
-            if (method === 'cancel') { await ctx.answerCbQuery(); ctx.reply(langDB[lang].withdraw_cancel, { reply_markup: getMainMenu(lang) }); return ctx.scene.leave(); }
+            if (method === 'cancel') { await ctx.answerCbQuery(); ctx.reply(langDB[lang].withdraw_cancel, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); return ctx.scene.leave(); }
             ctx.wizard.state.method = method; await ctx.answerCbQuery();
             const mNames = { bkash: 'bKash', nagod: 'Nagod', binance: 'Binance' };
-            ctx.reply(langDB[lang].withdraw_acc(mNames[method]), { parse_mode: 'Markdown', reply_markup: { keyboard: [[{ text: langDB[lang].cancel }]], resize_keyboard: true } });
+            ctx.reply(langDB[lang].withdraw_acc(mNames[method]), { parse_mode: 'Markdown', reply_markup: { keyboard: [[{ text: langDB[lang].cancel, style: 'danger' }]], resize_keyboard: true } });
             return ctx.wizard.next();
         } 
     },
     async (ctx) => {
         const lang = ctx.scene.session.lang;
-        if (ctx.message.text === langDB[lang].cancel) { ctx.reply(langDB[lang].withdraw_cancel, { reply_markup: getMainMenu(lang) }); return ctx.scene.leave(); }
+        if (ctx.message.text === langDB[lang].cancel) { ctx.reply(langDB[lang].withdraw_cancel, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); return ctx.scene.leave(); }
         ctx.wizard.state.account = ctx.message.text; ctx.reply(langDB[lang].withdraw_amt); return ctx.wizard.next();
     },
     async (ctx) => {
         const lang = ctx.scene.session.lang;
-        if (ctx.message.text === langDB[lang].cancel) { ctx.reply(langDB[lang].withdraw_cancel, { reply_markup: getMainMenu(lang) }); return ctx.scene.leave(); }
+        if (ctx.message.text === langDB[lang].cancel) { ctx.reply(langDB[lang].withdraw_cancel, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); return ctx.scene.leave(); }
         const amount = parseFloat(ctx.message.text); if (isNaN(amount) || amount <= 0) return ctx.reply(langDB[lang].invalid_amt);
         const u = await User.findById(ctx.wizard.state.userId); const method = ctx.wizard.state.method;
-        if (amount > u.earned) { ctx.reply(langDB[lang].low_bal, { reply_markup: getMainMenu(lang) }); return ctx.scene.leave(); }
+        if (amount > u.earned) { ctx.reply(langDB[lang].low_bal, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); return ctx.scene.leave(); }
         const feeConfig = await Config.findOne({ key: `${method}Fee` }); let feePercent = feeConfig ? parseFloat(feeConfig.value) : 0;
         const fee = (amount * feePercent) / 100; const netAmount = amount - fee;
         try {
             await new Withdrawal({ uid: u._id, name: u.name, method, account: ctx.wizard.state.account, amount, netAmount, fee }).save();
             await User.findByIdAndUpdate(u._id, { $inc: { earned: -amount }, withdrawStatus: 'Pending' });
-            ctx.reply(langDB[lang].withdraw_receipt(method.toUpperCase(), ctx.wizard.state.account, amount.toFixed(2), fee.toFixed(2), netAmount.toFixed(2)), { parse_mode: 'Markdown', reply_markup: getMainMenu(lang) });
+            ctx.reply(langDB[lang].withdraw_receipt(method.toUpperCase(), ctx.wizard.state.account, amount.toFixed(2), fee.toFixed(2), netAmount.toFixed(2)), { parse_mode: 'Markdown', reply_markup: getMainMenu(lang, checkAdmin(ctx)) });
         } catch (e) { console.error(e); }
         return ctx.scene.leave();
     }
 );
 
-// Admin Broadcast Wizard
 const adminBroadcastWizard = new Scenes.WizardScene('ADMIN_BROADCAST_WIZARD',
     async (ctx) => {
-        ctx.reply("📢 ইউজারদের কাছে কী মেসেজ পাঠাতে চান তা লিখুন।\n\nবাতিল করতে লিখুন: /cancel");
+        ctx.reply("📢 ইউজারদের কাছে কী মেসেজ পাঠাতে চান তা লিখুন।\n\nবাতিল করতে লিখুন: /cancel", { reply_markup: { keyboard: [[{ text: '/cancel', style: 'danger' }]], resize_keyboard: true } });
         return ctx.wizard.next();
     },
     async (ctx) => {
         if (!ctx.message.text) return;
-        if (ctx.message.text === '/cancel') { ctx.reply("❌ ব্রডকাস্ট বাতিল করা হয়েছে।"); return ctx.scene.leave(); }
+        if (ctx.message.text === '/cancel') { ctx.reply("❌ ব্রডকাস্ট বাতিল করা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
         
         ctx.reply("⏳ ব্রডকাস্ট মেসেজ পাঠানো শুরু হচ্ছে...");
         const users = await User.find({ telegramId: { $ne: null } });
@@ -346,7 +354,7 @@ const adminBroadcastWizard = new Scenes.WizardScene('ADMIN_BROADCAST_WIZARD',
         for (const u of users) {
             try { await bot.telegram.sendMessage(u.telegramId, ctx.message.text, { parse_mode: 'Markdown' }); count++; } catch (e) { }
         }
-        ctx.reply(`✅ ব্রডকাস্ট সম্পূর্ণ হয়েছে! মোট ${count} জন ইউজারকে মেসেজ পাঠানো হয়েছে।`);
+        ctx.reply(`✅ ব্রডকাস্ট সম্পূর্ণ হয়েছে! মোট ${count} জন ইউজারকে মেসেজ পাঠানো হয়েছে।`, { reply_markup: getMainMenu(await getLang(ctx), true) });
         return ctx.scene.leave();
     }
 );
@@ -369,24 +377,24 @@ async function registerUser(ctx) {
 bot.action('check_join', async (ctx) => {
     try {
         const member = await ctx.telegram.getChatMember(CHANNEL_USERNAME, ctx.from.id);
-        if (['member', 'administrator', 'creator'].includes(member.status)) { await ctx.deleteMessage(); await registerUser(ctx); const lang = await getLang(ctx); await ctx.reply(lang === 'bn' ? '✅ ধন্যবাদ! এখন আপনি Bot টি ব্যবহার করতে পারবেন।' : '✅ Thank you! You can now use the Bot.', { reply_markup: getMainMenu(lang) }); } 
+        if (['member', 'administrator', 'creator'].includes(member.status)) { await ctx.deleteMessage(); await registerUser(ctx); const lang = await getLang(ctx); await ctx.reply(lang === 'bn' ? '✅ ধন্যবাদ! এখন আপনি Bot টি ব্যবহার করতে পারবেন।' : '✅ Thank you! You can now use the Bot.', { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); } 
         else await ctx.answerCbQuery('❌ আপনি এখনও জয়েন করেননি!', { show_alert: true });
     } catch (e) { await ctx.answerCbQuery('❌ Error!', { show_alert: true }); }
 });
 
 bot.action('SET_LANG_BN', async (ctx) => { await ctx.answerCbQuery().catch(()=>{}); await updateLang(ctx, 'bn'); });
 bot.action('SET_LANG_EN', async (ctx) => { await ctx.answerCbQuery().catch(()=>{}); await updateLang(ctx, 'en'); });
-async function updateLang(ctx, lang) { if (!ctx.session) ctx.session = {}; ctx.session.lang = lang; await User.findOneAndUpdate({ telegramId: ctx.from.id.toString() }, { language: lang }); await ctx.deleteMessage().catch(()=>{}); ctx.reply(lang === 'bn' ? '✅ ভাষা বাংলায় পরিবর্তন করা হয়েছে।' : '✅ Language updated to English.', { reply_markup: getMainMenu(lang) }); }
+async function updateLang(ctx, lang) { if (!ctx.session) ctx.session = {}; ctx.session.lang = lang; await User.findOneAndUpdate({ telegramId: ctx.from.id.toString() }, { language: lang }); await ctx.deleteMessage().catch(()=>{}); ctx.reply(lang === 'bn' ? '✅ ভাষা বাংলায় পরিবর্তন করা হয়েছে।' : '✅ Language updated to English.', { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); }
 
-bot.start(async (ctx) => { await registerUser(ctx); const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? `স্বাগতম, ${ctx.from.first_name}!` : `Welcome, ${ctx.from.first_name}!`, { reply_markup: getMainMenu(lang) }); });
-bot.hears([langDB.bn.return_home, langDB.en.return_home], async (ctx) => { const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? '🏠 হোম মেনু' : '🏠 Home Menu', { reply_markup: getMainMenu(lang) }); });
+bot.start(async (ctx) => { await registerUser(ctx); const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? `স্বাগতম, ${ctx.from.first_name}!` : `Welcome, ${ctx.from.first_name}!`, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); });
+bot.hears([langDB.bn.return_home, langDB.en.return_home], async (ctx) => { const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? '🏠 হোম মেনু' : '🏠 Home Menu', { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); });
 bot.hears([langDB.bn.menu_tasks, langDB.en.menu_tasks], showTasks); bot.hears([langDB.bn.menu_wallet, langDB.en.menu_wallet], showWallet); bot.hears([langDB.bn.menu_profile, langDB.en.menu_profile], showProfile); bot.hears([langDB.bn.menu_top, langDB.en.menu_top], showTopUsers); bot.hears([langDB.bn.menu_referral, langDB.en.menu_referral], showReferral);
-bot.hears([langDB.bn.menu_lang, langDB.en.menu_lang], (ctx) => { ctx.reply('🌐 ভাষা নির্বাচন করুন / Select your language:', { reply_markup: { inline_keyboard: [[{ text: '🇧🇩 বাংলা', callback_data: 'SET_LANG_BN' }, { text: '🇬🇧 English', callback_data: 'SET_LANG_EN' }]] } }); });
+bot.hears([langDB.bn.menu_lang, langDB.en.menu_lang], (ctx) => { ctx.reply('🌐 ভাষা নির্বাচন করুন / Select your language:', { reply_markup: { inline_keyboard: [[{ text: '🇧🇩 বাংলা', callback_data: 'SET_LANG_BN', style: 'primary' }, { text: '🇬🇧 English', callback_data: 'SET_LANG_EN', style: 'primary' }]] } }); });
 
 bot.action(/VIEW_TASK_(.+)/, async (ctx) => {
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্কটি পাওয়া যায়নি!');
     const lang = await getLang(ctx); const rules = task.rules || (lang === 'bn' ? 'উপরের নিয়মগুলো মেনে কাজ করুন। নিয়ম না মানলে রিপোর্ট বাতিল করা হবে ❌' : 'Follow the rules given above and work. If you do not follow the rules, the report will be rejected ❌');
-    await ctx.deleteMessage().catch(()=>{}); await ctx.reply(langDB[lang].task_intro(task.name, task.price, rules), { reply_markup: { inline_keyboard: [[{ text: langDB[lang].start_btn, callback_data: `START_TASK_${task._id}` }]] } });
+    await ctx.deleteMessage().catch(()=>{}); await ctx.reply(langDB[lang].task_intro(task.name, task.price, rules), { reply_markup: { inline_keyboard: [[{ text: langDB[lang].start_btn, callback_data: `START_TASK_${task._id}`, style: 'success' }]] } });
 });
 
 bot.action(/START_TASK_(.+)/, async (ctx) => {
@@ -400,24 +408,24 @@ bot.action(/START_TASK_(.+)/, async (ctx) => {
 bot.action(/WITHDRAW_(.+)/, async (ctx) => ctx.scene.enter('WITHDRAW_WIZARD', { userId: ctx.match[1] }));
 
 // ==========================================
-// ৯. Admin Panel System (UPDATED)
+// ৯. Admin Panel System (Bottom Bar Triggered)
 // ==========================================
 function getAdminMenu() {
     return { inline_keyboard: [
-        [{ text: '📊 Dashboard Stats', callback_data: 'ADMIN_STATS' }],
-        [{ text: '📋 Review Pending Tasks', callback_data: 'ADMIN_PENDING_TASKS' }],
-        [{ text: '💸 Review Withdrawals', callback_data: 'ADMIN_PENDING_WDS' }],
-        [{ text: '📢 Broadcast Message', callback_data: 'ADMIN_BROADCAST' }],
-        [{ text: `👑 Admin ID: ${process.env.ADMIN_ID}`, callback_data: 'ADMIN_INFO' }] // <-- New Admin ID button at the bottom
+        [{ text: '📊 Dashboard Stats', callback_data: 'ADMIN_STATS', style: 'primary' }],
+        [{ text: '📋 Review Pending Tasks', callback_data: 'ADMIN_PENDING_TASKS', style: 'primary' }],
+        [{ text: '💸 Review Withdrawals', callback_data: 'ADMIN_PENDING_WDS', style: 'primary' }],
+        [{ text: '📢 Broadcast Message', callback_data: 'ADMIN_BROADCAST', style: 'primary' }],
+        [{ text: `👑 Admin ID: ${process.env.ADMIN_ID}`, callback_data: 'ADMIN_INFO', style: 'danger' }]
     ]};
 }
 
-bot.command('admin', async (ctx) => {
+// "👑 Admin Panel" বাটনে ক্লিক করলে এই ফাংশন কাজ করবে (কমান্ডের বদলে)
+bot.hears('👑 Admin Panel', async (ctx) => {
     if (ctx.from.id.toString() !== process.env.ADMIN_ID) return;
     ctx.reply('👑 **Taskesy Admin Panel**\nকী চেক করতে চান তা নির্বাচন করুন:', { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
-// To prevent loading icon when Admin ID button is clicked
 bot.action('ADMIN_INFO', (ctx) => ctx.answerCbQuery('এই বটটি আপনার দ্বারা নিয়ন্ত্রিত হচ্ছে! 👑', { show_alert: true }));
 
 bot.action('ADMIN_STATS', async (ctx) => {
@@ -428,7 +436,6 @@ bot.action('ADMIN_STATS', async (ctx) => {
     await ctx.editMessageText(`📊 **ড্যাশবোর্ড স্ট্যাটাস**\n━━━━━━━━━━━━━\n👥 মোট ইউজার: ${users} জন\n⏳ পেন্ডিং টাস্ক: ${tasks} টি\n💸 পেন্ডিং উইথড্র: ${wds} টি`, { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
-// Admin Task Review
 bot.action('ADMIN_PENDING_TASKS', async (ctx) => {
     if (ctx.from.id.toString() !== process.env.ADMIN_ID) return;
     const sub = await Submission.findOne({ status: 'pending' });
@@ -438,8 +445,8 @@ bot.action('ADMIN_PENDING_TASKS', async (ctx) => {
     text += `🆔 UID: \`${sub.fbUid || 'N/A'}\`\n🔐 2FA: \`${sub.secret2fa || 'N/A'}\`\n🍪 Cookie: \`${sub.cookie || 'N/A'}\`\n📧 Email: \`${sub.generatedEmail || 'N/A'}\`\n🔑 Pass: \`${sub.password || 'N/A'}\``;
     
     await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
-        [{ text: '✅ Approve', callback_data: `ADMIN_APP_TASK_${sub._id}` }, { text: '❌ Reject', callback_data: `ADMIN_REJ_TASK_${sub._id}` }],
-        [{ text: '🔙 Back', callback_data: 'ADMIN_STATS' }]
+        [{ text: '✅ Approve', callback_data: `ADMIN_APP_TASK_${sub._id}`, style: 'success' }, { text: '❌ Reject', callback_data: `ADMIN_REJ_TASK_${sub._id}`, style: 'danger' }],
+        [{ text: '🔙 Back', callback_data: 'ADMIN_STATS', style: 'primary' }]
     ]}});
 });
 
@@ -465,7 +472,6 @@ bot.action(/ADMIN_REJ_TASK_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_PENDING_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// Admin Withdrawal Review
 bot.action('ADMIN_PENDING_WDS', async (ctx) => {
     if (ctx.from.id.toString() !== process.env.ADMIN_ID) return;
     const wd = await Withdrawal.findOne({ status: 'pending' }).populate('uid');
@@ -474,8 +480,8 @@ bot.action('ADMIN_PENDING_WDS', async (ctx) => {
     let text = `💸 **Withdrawal Review**\n━━━━━━━━━━━━━\n👤 **Name:** ${wd.name}\n💰 **Amount:** ৳${wd.amount}\n🎁 **Net Payable:** ৳${wd.netAmount}\n\n💳 **Method:** ${wd.method.toUpperCase()}\n🏦 **Account:** \`${wd.account}\``;
     
     await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
-        [{ text: '✅ Mark as Paid', callback_data: `ADMIN_APP_WD_${wd._id}` }, { text: '❌ Reject & Refund', callback_data: `ADMIN_REJ_WD_${wd._id}` }],
-        [{ text: '🔙 Back', callback_data: 'ADMIN_STATS' }]
+        [{ text: '✅ Mark as Paid', callback_data: `ADMIN_APP_WD_${wd._id}`, style: 'success' }, { text: '❌ Reject & Refund', callback_data: `ADMIN_REJ_WD_${wd._id}`, style: 'danger' }],
+        [{ text: '🔙 Back', callback_data: 'ADMIN_STATS', style: 'primary' }]
     ]}});
 });
 
