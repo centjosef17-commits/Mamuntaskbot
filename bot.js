@@ -6,10 +6,9 @@ const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
 const xlsx = require('xlsx');
-const fs = require('fs'); 
 
 // ==========================================
-// Anti-Crash System (বট যাতে পার্মানেন্টলি বন্ধ না হয়)
+// Anti-Crash System
 // ==========================================
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -671,7 +670,7 @@ bot.action(/ADMIN_ET_DEL_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_LIVE_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// View Tasks (Export Excel File Fix)
+// View Tasks (Export Excel File Fix via Buffer directly to avoid disk permission issues on Render)
 bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
@@ -730,17 +729,14 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, ws, "Tasks");
         
+        // Directly pass buffer to telegram without saving to hard disk
         const excelBuffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
         let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
         
-        fs.writeFileSync(fileName, excelBuffer);
-        
         await ctx.replyWithDocument(
-            { source: fileName, filename: fileName }, 
+            { source: Buffer.from(excelBuffer), filename: fileName }, 
             { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' }
         );
-        
-        fs.unlinkSync(fileName);
         
     } catch (err) {
         console.error("Export Error:", err);
@@ -821,4 +817,4 @@ setInterval(async () => {
 }, 10000);
 
 const app = express(); app.get('/', (req, res) => res.send('Taskesy PRO Bot is Active!')); app.listen(process.env.PORT || 3000, () => console.log(`Server listening on port ${process.env.PORT || 3000}!`));
-bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Updated Admin Panel!')); 
+bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Updated Admin Panel!')); process.once('SIGINT', () => bot.stop('SIGINT')); process.once('SIGTERM', () => bot.stop('SIGTERM'));
