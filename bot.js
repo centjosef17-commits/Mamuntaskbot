@@ -6,7 +6,17 @@ const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
 const xlsx = require('xlsx');
-const fs = require('fs'); // নতুন যুক্ত করা হয়েছে ফাইল ডাউনলোডের সমস্যার জন্য
+const fs = require('fs'); 
+
+// ==========================================
+// Anti-Crash System (বট যাতে পার্মানেন্টলি বন্ধ না হয়)
+// ==========================================
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+});
 
 // ==========================================
 // ১. MongoDB & Redis Setup 
@@ -488,14 +498,19 @@ bot.use(stage.middleware());
 // ৭. User Handlers
 // ==========================================
 async function registerUser(ctx) {
-    const telegramId = ctx.from.id.toString(); const existing = await User.findOne({ telegramId });
-    if (!existing) {
-        let referrerId = null; let payload = null; try { payload = await redis.get(`ref_${telegramId}`); } catch(e){}
-        if (payload && payload !== telegramId) { 
-            const refUser = await User.findOne({ telegramId: payload }); 
-            if (refUser) { referrerId = refUser._id; await User.findByIdAndUpdate(referrerId, { $inc: { refCount: 1 } }); bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(console.error); } 
+    const telegramId = ctx.from.id.toString(); 
+    try {
+        const existing = await User.findOne({ telegramId });
+        if (!existing) {
+            let referrerId = null; let payload = null; try { payload = await redis.get(`ref_${telegramId}`); } catch(e){}
+            if (payload && payload !== telegramId) { 
+                const refUser = await User.findOne({ telegramId: payload }); 
+                if (refUser) { referrerId = refUser._id; await User.findByIdAndUpdate(referrerId, { $inc: { refCount: 1 } }); bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(()=>{}); } 
+            }
+            await new User({ telegramId, name: ctx.from.first_name, shortRefId: Math.random().toString(36).substring(2, 8).toUpperCase(), referrerId, joinDate: new Date().toLocaleDateString('en-GB') }).save();
         }
-        await new User({ telegramId, name: ctx.from.first_name, shortRefId: Math.random().toString(36).substring(2, 8).toUpperCase(), referrerId, joinDate: new Date().toLocaleDateString('en-GB') }).save();
+    } catch(err) {
+        if (err.code !== 11000) console.error(err);
     }
 }
 
@@ -715,7 +730,6 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, ws, "Tasks");
         
-        // Render এ socket hang up ফিক্স করার জন্য লোকাল ফাইল সেভ করে পাঠানো হচ্ছে
         const excelBuffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
         let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
         
@@ -726,7 +740,6 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
             { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' }
         );
         
-        // পাঠানোর পর ফাইল ডিলিট করে দেওয়া হচ্ছে
         fs.unlinkSync(fileName);
         
     } catch (err) {
@@ -808,4 +821,4 @@ setInterval(async () => {
 }, 10000);
 
 const app = express(); app.get('/', (req, res) => res.send('Taskesy PRO Bot is Active!')); app.listen(process.env.PORT || 3000, () => console.log(`Server listening on port ${process.env.PORT || 3000}!`));
-bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Updated Admin Panel!')); process.once('SIGINT', () => bot.stop('SIGINT')); process.once('SIGTERM', () => bot.stop('SIGTERM'));
+bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Updated Admin Panel!')); 
