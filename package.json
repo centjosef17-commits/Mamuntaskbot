@@ -13,7 +13,8 @@
     "ioredis": "^5.4.0",
     "mongoose": "^8.3.0",
     "otpauth": "^9.2.0",
-    "telegraf": "^4.15.0"
+    "telegraf": "^4.15.0",
+    "xlsx": "^0.18.5"
   },
   "engines": {
     "node": ">=18.0.0"
