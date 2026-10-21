@@ -1,2 +1,17 @@
+# Dependency directories
 node_modules/
+
+# Environment variables (এটার কারণে .env ফাইল গিটহাবে আপলোড হবে না)
 .env
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Optional npm cache directory
+.npm
+
+# OS metadata
+.DS_Store
+Thumbs.db
