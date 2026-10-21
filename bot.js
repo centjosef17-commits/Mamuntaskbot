@@ -51,6 +51,15 @@ const Withdrawal = mongoose.model('Withdrawal', WithdrawalSchema);
 const ConfigSchema = new mongoose.Schema({ key: String, value: String });
 const Config = mongoose.model('Config', ConfigSchema);
 
+async function getSetting(key, def) {
+    let s = await Config.findOne({ key });
+    if (!s) { s = await new Config({ key, value: def }).save(); }
+    return s.value;
+}
+async function setSetting(key, value) {
+    await Config.findOneAndUpdate({ key }, { value }, { upsert: true });
+}
+
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const redis = new Redis(process.env.REDIS_URL, { tls: { rejectUnauthorized: false }, maxRetriesPerRequest: null, enableReadyCheck: false });
 
@@ -67,7 +76,7 @@ const langDB = {
         no_tasks: 'এই মুহূর্তে কোনো টাস্ক চালু নেই।', select_task: 'নিচের তালিকা থেকে একটি টাস্ক নির্বাচন করুন:',
         profile: (name, date, app, rej, pend, proc, earn) => `👤 **প্রোফাইল ইনফরমেশন**\n━━━━━━━━━━━━━━━━━━━━\n📛 **নাম:** ${name}\n📅 **জয়েন ডেট:** ${date}\n\n📊 **আপনার স্ট্যাটাস:**\n✅ **Approved:** \`${app}\` টি\n❌ **Rejected:** \`${rej}\` টি\n⏳ **Pending:** \`${pend}\` টি\n🔄 **Processing:** \`${proc}\` টি\n\n💵 **মোট আয়:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
         top_title: '🏆 **রিয়েল-টাইম লিডারবোর্ড (Top 10)**\n━━━━━━━━━━━━━━━━━━━━\n\n', top_empty: 'এখনও কোনো লিডারবোর্ড ডেটা নেই।',
-        ref_text: (link, count, earn) => `🎁 **রেফারেল প্রোগ্রাম**\n━━━━━━━━━━━━━━━━━━━━\nআপনার লিংক দিয়ে বন্ধুদের ইনভাইট করে এক্সট্রা কমিশন আয় করুন!\n\n🔗 **আপনার রেফার লিংক:**\n\`${link}\`\n\n👥 **মোট রেফার:** \`${count}\` জন\n💰 **রেফার থেকে আয়:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
+        ref_text: (link, count, earn, comm) => `🎁 **রেফারেল প্রোগ্রাম**\n━━━━━━━━━━━━━━━━━━━━\nআপনার লিংক দিয়ে বন্ধুদের ইনভাইট করুন এবং তাদের টাস্ক কমপ্লিট হলে **${comm}% কমিশন** আয় করুন!\n\n🔗 **আপনার রেফার লিংক:**\n\`${link}\`\n\n👥 **মোট রেফার:** \`${count}\` জন\n💰 **রেফার থেকে আয়:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
         task_intro: (name, price, rules) => `⏳ Review time: 24 hours ⏳\n\n📋 Task: ${name} (৳${price})\n📄 Description: 📌 ${rules}\n✍️ Report instruction:\n.\n\n⏳ Review time: 24 hours ⏳`,
         details_ig_tw: (fName, uName, pass) => `First name: \`${fName}\`\nLogin: \`${uName}\`\nPassword: \`${pass}\``,
         details_fb: (fName, lName, pass) => `First name: \`${fName}\`\nLast name: \`${lName}\`\nPassword: \`${pass}\``,
@@ -101,7 +110,7 @@ const langDB = {
         no_tasks: 'No active tasks at the moment.', select_task: 'Select a task from the list below:',
         profile: (name, date, app, rej, pend, proc, earn) => `👤 **Profile Info**\n━━━━━━━━━━━━━━━━━━━━\n📛 **Name:** ${name}\n📅 **Join Date:** ${date}\n\n📊 **Your Status:**\n✅ **Approved:** \`${app}\`\n❌ **Rejected:** \`${rej}\`\n⏳ **Pending:** \`${pend}\`\n🔄 **Processing:** \`${proc}\`\n\n💵 **Total Earned:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
         top_title: '🏆 **Real-Time Leaderboard (Top 10)**\n━━━━━━━━━━━━━━━━━━━━\n\n', top_empty: 'No leaderboard data yet.',
-        ref_text: (link, count, earn) => `🎁 **Referral Program**\n━━━━━━━━━━━━━━━━━━━━\nInvite friends and earn commission from their approved tasks!\n\n🔗 **Your Link:**\n\`${link}\`\n\n👥 **Total Referrals:** \`${count}\`\n💰 **Referral Earnings:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
+        ref_text: (link, count, earn, comm) => `🎁 **Referral Program**\n━━━━━━━━━━━━━━━━━━━━\nInvite friends and earn **${comm}% commission** from their approved tasks!\n\n🔗 **Your Link:**\n\`${link}\`\n\n👥 **Total Referrals:** \`${count}\`\n💰 **Referral Earnings:** \`৳${earn}\`\n━━━━━━━━━━━━━━━━━━━━`,
         task_intro: (name, price, rules) => `⏳ Review time: 24 hours ⏳\n\n📋 Task: ${name} (৳${price})\n📄 Description: 📌Follow the rules given above and work. If you do not follow the rules, the report will be rejected ❌\n✍️ Report instruction:\n.\n\n⏳ Review time: 24 hours ⏳`,
         details_ig_tw: (fName, uName, pass) => `First name: \`${fName}\`\nLogin: \`${uName}\`\nPassword: \`${pass}\``,
         details_fb: (fName, lName, pass) => `First name: \`${fName}\`\nLast name: \`${lName}\`\nPassword: \`${pass}\``,
@@ -135,13 +144,7 @@ async function getLang(ctx) {
     if (ctx.session && ctx.session.lang) return ctx.session.lang;
     const telegramId = ctx.from?.id?.toString();
     if (!telegramId) return 'bn';
-    try {
-        const u = await User.findOne({ telegramId });
-        if (u) {
-            if (ctx.session) ctx.session.lang = u.language || 'bn';
-            return u.language || 'bn';
-        }
-    } catch(e) {}
+    try { const u = await User.findOne({ telegramId }); if (u) { if (ctx.session) ctx.session.lang = u.language || 'bn'; return u.language || 'bn'; } } catch(e) {}
     return 'bn';
 }
 
@@ -159,19 +162,31 @@ function getMainMenu(lang, isAdmin = false) {
 }
 
 // ==========================================
-// ৩. Session & Middleware
+// ৩. Session, Config & Middleware
 // ==========================================
 bot.use(session()); 
 
 bot.use(async (ctx, next) => {
     const telegramId = ctx.from?.id?.toString();
+    const isAdmin = checkAdmin(ctx);
+    const botStatus = await getSetting('botStatus', 'on');
+    const maintenance = await getSetting('maintenance', 'off');
+
+    if (!isAdmin) {
+        if (botStatus === 'off') return;
+        if (maintenance === 'on') {
+            if (ctx.message && ctx.message.text && (ctx.message.text.startsWith('/start') || ctx.message.text === '👑 Admin Panel')) {} 
+            else { try { if (ctx.message || ctx.callbackQuery) await ctx.reply("⚙️ Bot is currently under maintenance. Please try again later."); } catch(e){} return; }
+        }
+    }
+
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/start')) {
         const parts = ctx.message.text.split(' ');
         if (parts.length > 1 && telegramId) { try { await redis.set(`ref_${telegramId}`, parts[1], 'EX', 3600); } catch(e){} }
     }
     if (ctx.type === 'callback_query' && (ctx.callbackQuery.data === 'check_join' || ctx.callbackQuery.data.startsWith('SET_LANG_') || ctx.callbackQuery.data.startsWith('ADMIN_'))) return next();
     
-    if (ctx.chat && ctx.chat.type === 'private' && telegramId && telegramId !== process.env.ADMIN_ID) {
+    if (ctx.chat && ctx.chat.type === 'private' && telegramId && !isAdmin) {
         try {
             const member = await ctx.telegram.getChatMember(CHANNEL_USERNAME, ctx.from.id);
             if (['member', 'administrator', 'creator'].includes(member.status)) return next();
@@ -188,6 +203,9 @@ bot.use(async (ctx, next) => {
 // ৪. Reusable Functions
 // ==========================================
 async function showTasks(ctx) {
+    const taskStatus = await getSetting('taskStatus', 'on');
+    if (taskStatus === 'off' && !checkAdmin(ctx)) return ctx.reply("⚠️ Currently task submission is disabled.");
+    
     const lang = await getLang(ctx);
     const tasks = await Task.find({ status: 'active' });
     if (tasks.length === 0) return ctx.reply(langDB[lang].no_tasks);
@@ -228,8 +246,9 @@ async function showReferral(ctx) {
     const u = await User.findOne({ telegramId: ctx.from.id.toString() });
     if (!u) return;
     const botInfo = await bot.telegram.getMe();
-    const refLink = `https://t.me/${botInfo.username}?start=${u.shortRefId}`;
-    ctx.reply(langDB[lang].ref_text(refLink, u.refCount || 0, parseFloat(u.refEarn || 0).toFixed(2)), { parse_mode: 'Markdown' });
+    const refLink = `https://t.me/${botInfo.username}?start=${u.telegramId}`;
+    const comm = await getSetting('refCommission', '0');
+    ctx.reply(langDB[lang].ref_text(refLink, u.refCount || 0, parseFloat(u.refEarn || 0).toFixed(2), comm), { parse_mode: 'Markdown' });
 }
 
 // ==========================================
@@ -438,7 +457,23 @@ const adminEditTaskWizard = new Scenes.WizardScene('ADMIN_EDIT_TASK_WIZARD',
     }
 );
 
-const stage = new Scenes.Stage([taskWizard, withdrawWizard, adminBroadcastWizard, adminAddTaskWizard, adminEditTaskWizard]);
+const adminRefCommWizard = new Scenes.WizardScene('ADMIN_REF_COMM_WIZARD',
+    async (ctx) => {
+        ctx.reply("🎁 **রেফারেল কমিশন (%) লিখুন:**\n(যেমন: 10)\n\nবাতিল করতে লিখুন: /cancel", { parse_mode: 'Markdown', reply_markup: { keyboard: [[{ text: '/cancel', style: 'danger' }]], resize_keyboard: true } });
+        return ctx.wizard.next();
+    },
+    async (ctx) => {
+        if (!ctx.message || !ctx.message.text) return;
+        if (ctx.message.text === '/cancel') { ctx.reply("❌ বাতিল করা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
+        const val = parseFloat(ctx.message.text);
+        if (isNaN(val) || val < 0) return ctx.reply("⚠️ সঠিক সংখ্যা দিন:");
+        await setSetting('refCommission', val.toString());
+        ctx.reply(`✅ রেফারেল কমিশন ${val}% এ সেট করা হয়েছে!`, { reply_markup: getMainMenu(await getLang(ctx), true) });
+        return ctx.scene.leave();
+    }
+);
+
+const stage = new Scenes.Stage([taskWizard, withdrawWizard, adminBroadcastWizard, adminAddTaskWizard, adminEditTaskWizard, adminRefCommWizard]);
 bot.use(stage.middleware());
 
 // ==========================================
@@ -448,7 +483,10 @@ async function registerUser(ctx) {
     const telegramId = ctx.from.id.toString(); const existing = await User.findOne({ telegramId });
     if (!existing) {
         let referrerId = null; let payload = null; try { payload = await redis.get(`ref_${telegramId}`); } catch(e){}
-        if (payload) { const refUser = await User.findOne({ shortRefId: payload }); if (refUser) { referrerId = refUser._id; await User.findByIdAndUpdate(referrerId, { $inc: { refCount: 1 } }); bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(console.error); } }
+        if (payload && payload !== telegramId) { 
+            const refUser = await User.findOne({ telegramId: payload }); 
+            if (refUser) { referrerId = refUser._id; await User.findByIdAndUpdate(referrerId, { $inc: { refCount: 1 } }); bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(console.error); } 
+        }
         await new User({ telegramId, name: ctx.from.first_name, shortRefId: Math.random().toString(36).substring(2, 8).toUpperCase(), referrerId, joinDate: new Date().toLocaleDateString('en-GB') }).save();
     }
 }
@@ -465,23 +503,46 @@ bot.action('SET_LANG_BN', async (ctx) => { await ctx.answerCbQuery().catch(()=>{
 bot.action('SET_LANG_EN', async (ctx) => { await ctx.answerCbQuery().catch(()=>{}); await updateLang(ctx, 'en'); });
 async function updateLang(ctx, lang) { if (!ctx.session) ctx.session = {}; ctx.session.lang = lang; await User.findOneAndUpdate({ telegramId: ctx.from.id.toString() }, { language: lang }); await ctx.deleteMessage().catch(()=>{}); ctx.reply(lang === 'bn' ? '✅ ভাষা বাংলায় পরিবর্তন করা হয়েছে।' : '✅ Language updated to English.', { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); }
 
-bot.start(async (ctx) => { await registerUser(ctx); const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? `স্বাগতম, ${ctx.from.first_name}!` : `Welcome, ${ctx.from.first_name}!`, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); });
+bot.start(async (ctx) => { 
+    const botStatus = await getSetting('botStatus', 'on'); const maintenance = await getSetting('maintenance', 'off');
+    if (!checkAdmin(ctx) && (botStatus === 'off' || maintenance === 'on')) return; 
+    await registerUser(ctx); const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? `স্বাগতম, ${ctx.from.first_name}!` : `Welcome, ${ctx.from.first_name}!`, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); 
+});
 bot.hears([langDB.bn.return_home, langDB.en.return_home], async (ctx) => { const lang = await getLang(ctx); ctx.reply(lang === 'bn' ? '🏠 হোম মেনু' : '🏠 Home Menu', { reply_markup: getMainMenu(lang, checkAdmin(ctx)) }); });
 bot.hears([langDB.bn.menu_tasks, langDB.en.menu_tasks], showTasks); bot.hears([langDB.bn.menu_wallet, langDB.en.menu_wallet], showWallet); bot.hears([langDB.bn.menu_profile, langDB.en.menu_profile], showProfile); bot.hears([langDB.bn.menu_top, langDB.en.menu_top], showTopUsers); bot.hears([langDB.bn.menu_referral, langDB.en.menu_referral], showReferral);
 bot.hears([langDB.bn.menu_lang, langDB.en.menu_lang], (ctx) => { ctx.reply('🌐 ভাষা নির্বাচন করুন / Select your language:', { reply_markup: { inline_keyboard: [[{ text: '🇧🇩 বাংলা', callback_data: 'SET_LANG_BN', style: 'primary' }, { text: '🇬🇧 English', callback_data: 'SET_LANG_EN', style: 'primary' }]] } }); });
 
 bot.action(/VIEW_TASK_(.+)/, async (ctx) => {
+    const taskStatus = await getSetting('taskStatus', 'on');
+    if (taskStatus === 'off' && !checkAdmin(ctx)) return ctx.answerCbQuery('⚠️ Currently task submission is disabled.', { show_alert: true });
+
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্কটি পাওয়া যায়নি!');
     const lang = await getLang(ctx); const rules = task.rules || (lang === 'bn' ? 'উপরের নিয়মগুলো মেনে কাজ করুন। নিয়ম না মানলে রিপোর্ট বাতিল করা হবে ❌' : 'Follow the rules given above and work. If you do not follow the rules, the report will be rejected ❌');
     await ctx.deleteMessage().catch(()=>{}); await ctx.reply(langDB[lang].task_intro(task.name, task.price, rules), { reply_markup: { inline_keyboard: [[{ text: langDB[lang].start_btn, callback_data: `START_TASK_${task._id}`, style: 'success' }]] } });
 });
 
 bot.action(/START_TASK_(.+)/, async (ctx) => {
+    const taskStatus = await getSetting('taskStatus', 'on');
+    if (taskStatus === 'off' && !checkAdmin(ctx)) return ctx.answerCbQuery('⚠️ Currently task submission is disabled.', { show_alert: true });
+
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্কটি পাওয়া যায়নি!');
     const u = await User.findOne({ telegramId: ctx.from.id.toString() }); if(!u) return ctx.answerCbQuery('ইউজার ডাটাবেসে নেই!');
-    const fName = faker.person.firstName().replace(/[^a-zA-Z]/g, ''); const lName = faker.person.lastName().replace(/[^a-zA-Z]/g, ''); const uName = `${fName.toLowerCase()}_${lName.toLowerCase()}${Math.floor(Math.random() * 999)}`;
+    
+    let fName, lName, uName, email;
+    const lowerType = task.type ? task.type.toLowerCase() : '';
+    if (lowerType === 'tiktok') {
+        fName = faker.person.firstName().replace(/[^a-zA-Z]/g, '');
+        lName = faker.person.lastName().replace(/[^a-zA-Z]/g, '');
+        uName = `${fName.toLowerCase()}${lName.toLowerCase()}${Math.floor(1000 + Math.random() * 9000)}usa`;
+    } else {
+        fName = faker.person.firstName().replace(/[^a-zA-Z]/g, '');
+        lName = faker.person.lastName().replace(/[^a-zA-Z]/g, '');
+        uName = `${fName.toLowerCase()}_${lName.toLowerCase()}${Math.floor(Math.random() * 999)}`;
+    }
+    email = `${uName}@gmail.com`;
+
     await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(()=>{});
-    ctx.scene.enter('TASK_WIZARD', { taskData: task, fakeUser: { firstName: fName, lastName: lName, username: uName, email: `${uName}@gmail.com` }, userId: u._id });
+    ctx.scene.enter('TASK_WIZARD', { taskData: task, fakeUser: { firstName: fName, lastName: lName, username: uName, email: email }, userId: u._id });
 });
 
 bot.action(/WITHDRAW_(.+)/, async (ctx) => ctx.scene.enter('WITHDRAW_WIZARD', { userId: ctx.match[1] }));
@@ -491,10 +552,9 @@ bot.action(/WITHDRAW_(.+)/, async (ctx) => ctx.scene.enter('WITHDRAW_WIZARD', { 
 // ==========================================
 function getAdminMenu() {
     return { inline_keyboard: [
-        [{ text: '📊 Dashboard Stats', callback_data: 'ADMIN_STATS', style: 'primary' }, { text: '📋 View Tasks (Export)', callback_data: 'ADMIN_VIEW_TASKS', style: 'success' }],
-        [{ text: '🛠️ Task Manage', callback_data: 'ADMIN_TASK_MANAGE_MENU', style: 'primary' }],
-        [{ text: '📋 Pending Tasks', callback_data: 'ADMIN_PENDING_TASKS', style: 'primary' }, { text: '💸 Pending WDs', callback_data: 'ADMIN_PENDING_WDS', style: 'primary' }],
-        [{ text: '📢 Broadcast Message', callback_data: 'ADMIN_BROADCAST', style: 'primary' }],
+        [{ text: '📊 Dashboard Stats', callback_data: 'ADMIN_STATS', style: 'primary' }, { text: '⚙️ Settings', callback_data: 'ADMIN_SETTINGS', style: 'primary' }],
+        [{ text: '🛠️ Task Manage', callback_data: 'ADMIN_TASK_MANAGE_MENU', style: 'success' }, { text: '📋 View Tasks (Export)', callback_data: 'ADMIN_VIEW_TASKS', style: 'success' }],
+        [{ text: '💸 Review Withdrawals', callback_data: 'ADMIN_PENDING_WDS', style: 'primary' }, { text: '📢 Broadcast', callback_data: 'ADMIN_BROADCAST', style: 'primary' }],
         [{ text: `👑 Admin ID: ${process.env.ADMIN_ID}`, callback_data: 'ADMIN_INFO', style: 'danger' }]
     ]};
 }
@@ -516,6 +576,34 @@ bot.action('ADMIN_STATS', async (ctx) => {
     await ctx.editMessageText(`📊 **ড্যাশবোর্ড স্ট্যাটাস**\n━━━━━━━━━━━━━\n👥 মোট ইউজার: ${users} জন\n⏳ পেন্ডিং টাস্ক: ${tasks} টি\n💸 পেন্ডিং উইথড্র: ${wds} টি`, { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
+// Admin Settings
+bot.action('ADMIN_SETTINGS', async (ctx) => {
+    if (!checkAdmin(ctx)) return;
+    const botStatus = await getSetting('botStatus', 'on');
+    const taskStatus = await getSetting('taskStatus', 'on');
+    const maintenance = await getSetting('maintenance', 'off');
+    const refCommission = await getSetting('refCommission', '0');
+
+    ctx.editMessageText('⚙️ **Bot Settings**\nক্লিক করে On/Off পরিবর্তন করুন:', {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [
+            [{ text: `🤖 Bot Status: ${botStatus.toUpperCase()}`, callback_data: `SET_botStatus_${botStatus === 'on' ? 'off' : 'on'}`, style: botStatus === 'on' ? 'success' : 'danger' }],
+            [{ text: `⚡ Task System: ${taskStatus.toUpperCase()}`, callback_data: `SET_taskStatus_${taskStatus === 'on' ? 'off' : 'on'}`, style: taskStatus === 'on' ? 'success' : 'danger' }],
+            [{ text: `🚧 Maintenance: ${maintenance.toUpperCase()}`, callback_data: `SET_maintenance_${maintenance === 'on' ? 'off' : 'on'}`, style: maintenance === 'on' ? 'danger' : 'primary' }],
+            [{ text: `🎁 Ref Commission: ${refCommission}%`, callback_data: 'SET_REF_COMMISSION', style: 'primary' }],
+            [{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'danger' }]
+        ]}
+    });
+});
+
+bot.action(/SET_(botStatus|taskStatus|maintenance)_(on|off)/, async (ctx) => {
+    if (!checkAdmin(ctx)) return;
+    await setSetting(ctx.match[1], ctx.match[2]);
+    bot.handleUpdate({ callback_query: { data: 'ADMIN_SETTINGS', message: ctx.callbackQuery.message, from: ctx.from } });
+});
+bot.action('SET_REF_COMMISSION', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_REF_COMM_WIZARD'); });
+
+// Task Manage Menu
 bot.action('ADMIN_TASK_MANAGE_MENU', (ctx) => {
     if (!checkAdmin(ctx)) return;
     ctx.editMessageText('🛠️ **Task Manage**\nকী করতে চান?', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
@@ -527,7 +615,6 @@ bot.action('ADMIN_TASK_MANAGE_MENU', (ctx) => {
 
 bot.action('ADMIN_TASK_ADD', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_ADD_TASK_WIZARD'); });
 
-// Live Task Management
 bot.action('ADMIN_LIVE_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
@@ -575,7 +662,7 @@ bot.action(/ADMIN_VT_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
     ctx.editMessageText(`📋 **View Task:** ${task.name}\n\nকীভাবে ডাটা ডাউনলোড করতে চান?`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
-        [{ text: '✅ Complete Today (Reset)', callback_data: `ADMIN_VT_CT_${task._id}`, style: 'success' }],
+        [{ text: '✅ Complete Today', callback_data: `ADMIN_VT_CT_${task._id}`, style: 'success' }],
         [{ text: '📥 Download Live Task', callback_data: `ADMIN_VT_ALL_${task._id}`, style: 'primary' }],
         [{ text: '🔙 Back', callback_data: 'ADMIN_VIEW_TASKS', style: 'danger' }]
     ]}});
@@ -584,7 +671,6 @@ bot.action(/ADMIN_VT_(.+)/, async (ctx) => {
 async function exportTasksToExcel(ctx, taskId, completeToday) {
     const task = await Task.findById(taskId);
     if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
-    await ctx.reply("⏳ এক্সেল ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
     
     let query = { activeTaskId: taskId.toString() };
     if (completeToday) {
@@ -594,8 +680,9 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
     }
     
     const submissions = await Submission.find(query);
-    if (submissions.length === 0) return ctx.reply("⚠️ এই টাস্কের কোনো সাবমিট ডাটা পাওয়া যায়নি!");
+    if (submissions.length === 0) return ctx.reply("⚠️ No Pending Task");
 
+    await ctx.reply("⏳ এক্সেল ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
     let exportData = [];
     let isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
     
@@ -615,7 +702,7 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
     const ws = xlsx.utils.json_to_sheet(exportData);
     const wb = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(wb, ws, "Tasks");
-    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buffer = Buffer.from(xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }));
     
     let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
     await ctx.replyWithDocument({ source: buffer, filename: fileName }, { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' });
@@ -631,41 +718,18 @@ bot.action(/ADMIN_VT_ALL_(.+)/, async (ctx) => {
     await exportTasksToExcel(ctx, ctx.match[1], false);
 });
 
-// Pending Review Callbacks
-bot.action('ADMIN_PENDING_TASKS', async (ctx) => {
-    if (!checkAdmin(ctx)) return;
-    const sub = await Submission.findOne({ status: 'pending' });
-    if (!sub) return ctx.editMessageText('✅ এই মুহূর্তে কোনো পেন্ডিং টাস্ক নেই!', { reply_markup: getAdminMenu() });
-    
-    let text = `📋 **Task Review:** ${sub.taskId}\n━━━━━━━━━━━━━\n📌 **Task:** ${sub.taskName} (৳${sub.price})\n👤 **Sub. By:** ${sub.submittedBy}\n\n`;
-    text += `🆔 UID: \`${sub.fbUid || 'N/A'}\`\n🔐 2FA: \`${sub.secret2fa || 'N/A'}\`\n🍪 Cookie: \`${sub.cookie || 'N/A'}\`\n📧 Email: \`${sub.generatedEmail || 'N/A'}\`\n🔑 Pass: \`${sub.password || 'N/A'}\``;
-    
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
-        [{ text: '✅ Approve', callback_data: `ADMIN_APP_TASK_${sub._id}`, style: 'success' }, { text: '❌ Reject', callback_data: `ADMIN_REJ_TASK_${sub._id}`, style: 'danger' }],
-        [{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'primary' }]
-    ]}});
-});
-
-bot.action(/ADMIN_APP_TASK_(.+)/, async (ctx) => {
-    if (!checkAdmin(ctx)) return;
-    const sub = await Submission.findById(ctx.match[1]);
-    if (sub && sub.status === 'pending') { await Submission.findByIdAndUpdate(sub._id, { status: 'approved' }); await User.findByIdAndUpdate(sub.uid, { $inc: { earned: sub.price, approved: 1, pending: -1 } }); await ctx.answerCbQuery('টাস্ক অপ্প্রভ করা হয়েছে!'); }
-    bot.handleUpdate({ callback_query: { data: 'ADMIN_PENDING_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
-});
-
-bot.action(/ADMIN_REJ_TASK_(.+)/, async (ctx) => {
-    if (!checkAdmin(ctx)) return;
-    const sub = await Submission.findById(ctx.match[1]);
-    if (sub && sub.status === 'pending') { await Submission.findByIdAndUpdate(sub._id, { status: 'rejected' }); await User.findByIdAndUpdate(sub.uid, { $inc: { rejected: 1, pending: -1 } }); await ctx.answerCbQuery('টাস্ক রিজেক্ট করা হয়েছে!'); }
-    bot.handleUpdate({ callback_query: { data: 'ADMIN_PENDING_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
-});
-
+// Admin Withdrawal Review
 bot.action('ADMIN_PENDING_WDS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const wd = await Withdrawal.findOne({ status: 'pending' }).populate('uid');
     if (!wd) return ctx.editMessageText('✅ এই মুহূর্তে কোনো পেন্ডিং উইথড্র নেই!', { reply_markup: getAdminMenu() });
+    
     let text = `💸 **Withdrawal Review**\n━━━━━━━━━━━━━\n👤 **Name:** ${wd.name}\n💰 **Amount:** ৳${wd.amount}\n🎁 **Net Payable:** ৳${wd.netAmount}\n\n💳 **Method:** ${wd.method.toUpperCase()}\n🏦 **Account:** \`${wd.account}\``;
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '✅ Mark as Paid', callback_data: `ADMIN_APP_WD_${wd._id}`, style: 'success' }, { text: '❌ Reject & Refund', callback_data: `ADMIN_REJ_WD_${wd._id}`, style: 'danger' }], [{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'primary' }]]}});
+    
+    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
+        [{ text: '✅ Mark as Paid', callback_data: `ADMIN_APP_WD_${wd._id}`, style: 'success' }, { text: '❌ Reject & Refund', callback_data: `ADMIN_REJ_WD_${wd._id}`, style: 'danger' }],
+        [{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'primary' }]
+    ]}});
 });
 
 bot.action(/ADMIN_APP_WD_(.+)/, async (ctx) => {
@@ -683,12 +747,22 @@ bot.action(/ADMIN_REJ_WD_(.+)/, async (ctx) => {
 bot.action('ADMIN_BROADCAST', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_BROADCAST_WIZARD'); });
 
 // ==========================================
-// ৯. Real-Time Notifications
+// ৯. Real-Time Notifications & Ref Commission
 // ==========================================
 setInterval(async () => {
     try {
         const submissions = await Submission.find({ status: { $in: ['approved', 'rejected'] }, tgNotified: false }).populate('uid');
+        const refCommStr = await getSetting('refCommission', '0');
+        const commissionPct = parseFloat(refCommStr);
+
         for (const sub of submissions) {
+            if (sub.status === 'approved' && sub.uid && sub.uid.referrerId) {
+                if (commissionPct > 0) {
+                    const commAmount = (sub.price * commissionPct) / 100;
+                    await User.findByIdAndUpdate(sub.uid.referrerId, { $inc: { earned: commAmount, refEarn: commAmount } });
+                }
+            }
+
             if (sub.uid && sub.uid.telegramId) {
                 const lang = sub.uid.language || 'bn';
                 let msg = sub.status === 'approved' ? (lang === 'bn' ? `✅ **টাস্ক অপ্প্রভড!**\nআপনার টাস্কটি (ID: \`${sub.taskId}\`) সফলভাবে গ্রহণ করা হয়েছে।\n💰 আপনার ব্যালেন্সে **৳${sub.price}** অ্যাড হয়েছে।` : `✅ **Task Approved!**\nYour task (ID: \`${sub.taskId}\`) was accepted.\n💰 **৳${sub.price}** added to your balance.`) : (lang === 'bn' ? `❌ **টাস্ক রিজেক্টেড!**\nআপনার সাবমিট করা টাস্কটি (ID: \`${sub.taskId}\`) বাতিল করা হয়েছে।\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **কারণ:** Rejected for Blocked / Invalid Data.` : `❌ **Task Rejected!**\nYour submitted task (ID: \`${sub.taskId}\`) was declined.\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **Reason:** Rejected for Blocked / Invalid Data.`);
@@ -707,4 +781,4 @@ setInterval(async () => {
 }, 10000);
 
 const app = express(); app.get('/', (req, res) => res.send('Taskesy PRO Bot is Active!')); app.listen(process.env.PORT || 3000, () => console.log(`Server listening on port ${process.env.PORT || 3000}!`));
-bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Admin Panel!')); process.once('SIGINT', () => bot.stop('SIGINT')); process.once('SIGTERM', () => bot.stop('SIGTERM'));
+bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Updated Admin Panel!')); process.once('SIGINT', () => bot.stop('SIGINT')); process.once('SIGTERM', () => bot.stop('SIGTERM'));
