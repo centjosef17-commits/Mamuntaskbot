@@ -670,7 +670,7 @@ bot.action(/ADMIN_ET_DEL_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_LIVE_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// View Tasks (Export Excel File Fix via Buffer directly to avoid disk permission issues on Render)
+// View Tasks (CSV Export Feature to prevent File Sync/Buffer Crash)
 bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
@@ -708,7 +708,7 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
             return ctx.reply("⚠️ No Pending Task");
         }
 
-        await ctx.reply("⏳ এক্সেল ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
+        await ctx.reply("⏳ এক্সেল (CSV) ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
         let exportData = [];
         let isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
         
@@ -726,15 +726,13 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         }
         
         const ws = xlsx.utils.json_to_sheet(exportData);
-        const wb = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(wb, ws, "Tasks");
+        const csvString = xlsx.utils.sheet_to_csv(ws);
+        const buffer = Buffer.from(csvString, 'utf8');
         
-        // Directly pass buffer to telegram without saving to hard disk
-        const excelBuffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
+        let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.csv` : `All_${task.name.replace(/\s+/g, '_')}.csv`;
         
         await ctx.replyWithDocument(
-            { source: Buffer.from(excelBuffer), filename: fileName }, 
+            { source: buffer, filename: fileName }, 
             { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' }
         );
         
