@@ -240,13 +240,18 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
         const task = ctx.scene.state.taskData;
         const fakeUser = ctx.scene.state.fakeUser;
         ctx.scene.session.taskData = task; ctx.scene.session.fakeUser = fakeUser; ctx.scene.session.userId = ctx.scene.state.userId; ctx.scene.session.startTime = Date.now(); 
+        
         let detailsText = '';
-        if (task.type === 'ig' || task.type === 'twitter') detailsText = langDB[lang].details_ig_tw(fakeUser.firstName, fakeUser.username, task.password || 'Taskesy123@');
-        else if (task.type === 'fb' || task.type === 'facebook') detailsText = langDB[lang].details_fb(fakeUser.firstName, fakeUser.lastName, task.password || 'Taskesy123@');
+        const lowerType = task.type ? task.type.toLowerCase() : '';
+        if (['ig', 'instagram', 'twitter', 'tiktok'].includes(lowerType)) detailsText = langDB[lang].details_ig_tw(fakeUser.firstName, fakeUser.username, task.password || 'Taskesy123@');
+        else if (['fb', 'facebook'].includes(lowerType)) detailsText = langDB[lang].details_fb(fakeUser.firstName, fakeUser.lastName, task.password || 'Taskesy123@');
         else detailsText = langDB[lang].details_fb_gm(fakeUser.firstName, fakeUser.lastName, fakeUser.email, task.password || 'Taskesy123@');
+        
         ctx.scene.session.steps = [];
-        if (task.type === 'fb' || task.type === 'facebook') { if (task.is2FA) ctx.scene.session.steps.push('2fa'); ctx.scene.session.steps.push('cookie'); } 
-        else { if (task.isUID) ctx.scene.session.steps.push('uid'); if (task.is2FA) ctx.scene.session.steps.push('2fa'); if (task.isCookie) ctx.scene.session.steps.push('cookie'); }
+        if (task.isUID) ctx.scene.session.steps.push('uid'); 
+        if (task.is2FA) ctx.scene.session.steps.push('2fa'); 
+        if (task.isCookie) ctx.scene.session.steps.push('cookie'); 
+        
         ctx.scene.session.collected = { uid: '', secret2fa: '', cookie: '' };
         const sentMsg = await ctx.reply(detailsText, { parse_mode: 'Markdown', reply_markup: { remove_keyboard: true } });
         ctx.scene.session.taskMessageId = sentMsg.message_id;
@@ -277,8 +282,9 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
             let currentStep = ctx.scene.session.steps[0];
             if (currentStep === 'cookie') {
                 if (text.length < 15 || !text.includes('=')) return ctx.reply(langDB[lang].wrong_cookie);
-                if (ctx.scene.session.taskData.type === 'fb' || ctx.scene.session.taskData.type === 'facebook') {
-                    const match = text.match(/c_user=(\d+)/); if (match && match[1]) ctx.scene.session.collected.uid = match[1]; else return ctx.reply(lang === 'bn' ? '❌ c_user পাওয়া যায়নি!' : '❌ c_user not found!');
+                const lowerType = ctx.scene.session.taskData.type ? ctx.scene.session.taskData.type.toLowerCase() : '';
+                if (['fb', 'facebook'].includes(lowerType)) {
+                    const match = text.match(/c_user=(\d+)/); if (match && match[1]) ctx.scene.session.collected.uid = match[1]; else return ctx.reply(lang === 'bn' ? '❌ Cookies-এ c_user পাওয়া যায়নি!' : '❌ c_user not found in Cookies!');
                 }
                 ctx.scene.session.collected.cookie = text; ctx.scene.session.steps.shift(); await ctx.reply(langDB[lang].acc_cookie);
             }
@@ -359,7 +365,107 @@ const adminBroadcastWizard = new Scenes.WizardScene('ADMIN_BROADCAST_WIZARD',
     }
 );
 
-const stage = new Scenes.Stage([taskWizard, withdrawWizard, adminBroadcastWizard]);
+// New Task Add Wizard
+const adminAddTaskWizard = new Scenes.WizardScene('ADMIN_ADD_TASK_WIZARD',
+    async (ctx) => {
+        await ctx.reply("🛠️ **কোন প্ল্যাটফর্মের টাস্ক অ্যাড করতে চান?**\n(বাতিল করতে /cancel লিখুন)", {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: 'Facebook', callback_data: 'PLATFORM_Facebook', style: 'primary' }, { text: 'Instagram', callback_data: 'PLATFORM_Instagram', style: 'primary' }],
+                    [{ text: 'Twitter', callback_data: 'PLATFORM_Twitter', style: 'primary' }, { text: 'Tiktok', callback_data: 'PLATFORM_Tiktok', style: 'primary' }]
+                ]
+            }
+        });
+        return ctx.wizard.next();
+    },
+    async (ctx) => {
+        if (ctx.message && ctx.message.text === '/cancel') { ctx.reply("❌ টাস্ক অ্যাড করা বাতিল হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
+        if (!ctx.callbackQuery || !ctx.callbackQuery.data.startsWith('PLATFORM_')) return;
+        
+        ctx.wizard.state.platform = ctx.callbackQuery.data.split('_')[1];
+        await ctx.answerCbQuery();
+        
+        await ctx.editMessageText(`✅ **${ctx.wizard.state.platform}** সিলেক্ট করা হয়েছে।\n\nএবার টাস্কের ধরণ সিলেক্ট করুন:`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '🔑 2FA', callback_data: 'TYPE_2fa', style: 'primary' }, { text: '🍪 Cookies', callback_data: 'TYPE_cookie', style: 'primary' }],
+                    [{ text: '🔑 + 🍪 Both', callback_data: 'TYPE_both', style: 'success' }]
+                ]
+            }
+        });
+        return ctx.wizard.next();
+    },
+    async (ctx) => {
+        if (ctx.message && ctx.message.text === '/cancel') { ctx.reply("❌ বাতিল করা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
+        if (!ctx.callbackQuery || !ctx.callbackQuery.data.startsWith('TYPE_')) return;
+        
+        const type = ctx.callbackQuery.data.split('_')[1];
+        ctx.wizard.state.is2FA = (type === '2fa' || type === 'both');
+        ctx.wizard.state.isCookie = (type === 'cookie' || type === 'both');
+        await ctx.answerCbQuery();
+
+        await ctx.editMessageText("📝 **টাস্কের ইন্সট্রাকশন বা নিয়ম লিখুন:**\n\n(না দিতে চাইলে নিচের 'Skip' বাটনে ক্লিক করুন)", {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[{ text: '⏭️ Skip', callback_data: 'SKIP_INSTRUCTION', style: 'danger' }]]
+            }
+        });
+        return ctx.wizard.next();
+    },
+    async (ctx) => {
+        if (ctx.message && ctx.message.text === '/cancel') { ctx.reply("❌ বাতিল করা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
+        
+        if (ctx.callbackQuery && ctx.callbackQuery.data === 'SKIP_INSTRUCTION') {
+            ctx.wizard.state.rules = "উপরের নিয়মগুলো মেনে কাজ করুন। নিয়ম না মানলে রিপোর্ট বাতিল করা হবে ❌";
+            await ctx.answerCbQuery();
+            await ctx.editMessageText("💰 **টাস্কের প্রাইস বা টাকার পরিমাণ দিন:**\n(যেমন: 10)", { parse_mode: 'Markdown' });
+        } else if (ctx.message && ctx.message.text) {
+            ctx.wizard.state.rules = ctx.message.text;
+            await ctx.reply("💰 **টাস্কের প্রাইস বা টাকার পরিমাণ দিন:**\n(যেমন: 10)", { parse_mode: 'Markdown' });
+        } else return;
+        
+        return ctx.wizard.next();
+    },
+    async (ctx) => {
+        if (ctx.message && ctx.message.text === '/cancel') { ctx.reply("❌ বাতিল করা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
+        if (!ctx.message || !ctx.message.text) return;
+        
+        const price = parseFloat(ctx.message.text);
+        if (isNaN(price) || price <= 0) return ctx.reply("⚠️ দয়া করে সঠিক টাকার পরিমাণ দিন:");
+        ctx.wizard.state.price = price;
+        
+        await ctx.reply("🔐 **টাস্কের পাসওয়ার্ড দিন:**\n(যেমন: Taskesy123@)", { parse_mode: 'Markdown' });
+        return ctx.wizard.next();
+    },
+    async (ctx) => {
+        if (ctx.message && ctx.message.text === '/cancel') { ctx.reply("❌ বাতিল করা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) }); return ctx.scene.leave(); }
+        if (!ctx.message || !ctx.message.text) return;
+        ctx.wizard.state.password = ctx.message.text;
+        
+        try {
+            await new Task({
+                name: `${ctx.wizard.state.platform} Task`,
+                type: ctx.wizard.state.platform.toLowerCase(),
+                price: ctx.wizard.state.price,
+                password: ctx.wizard.state.password,
+                isUID: false,
+                is2FA: ctx.wizard.state.is2FA,
+                isCookie: ctx.wizard.state.isCookie,
+                rules: ctx.wizard.state.rules,
+                status: 'active'
+            }).save();
+            await ctx.reply("✅ **সাকসেসফুলি টাস্ক অ্যাড করা হয়েছে!**\nইউজাররা এখন এই টাস্কটি দেখতে পাবে।", { parse_mode: 'Markdown', reply_markup: getMainMenu(await getLang(ctx), true) });
+        } catch(e) {
+            console.error(e);
+            await ctx.reply("❌ ডাটাবেসে সেভ করতে সমস্যা হয়েছে।", { reply_markup: getMainMenu(await getLang(ctx), true) });
+        }
+        return ctx.scene.leave();
+    }
+);
+
+const stage = new Scenes.Stage([taskWizard, withdrawWizard, adminBroadcastWizard, adminAddTaskWizard]);
 bot.use(stage.middleware());
 
 // ==========================================
@@ -416,14 +522,14 @@ function getAdminMenu() {
         [{ text: '📋 Review Pending Tasks', callback_data: 'ADMIN_PENDING_TASKS', style: 'primary' }],
         [{ text: '💸 Review Withdrawals', callback_data: 'ADMIN_PENDING_WDS', style: 'primary' }],
         [{ text: '📢 Broadcast Message', callback_data: 'ADMIN_BROADCAST', style: 'primary' }],
+        [{ text: '🛠️ Task Manage (Add New)', callback_data: 'ADMIN_TASK_MANAGE', style: 'success' }],
         [{ text: `👑 Admin ID: ${process.env.ADMIN_ID}`, callback_data: 'ADMIN_INFO', style: 'danger' }]
     ]};
 }
 
-// "👑 Admin Panel" বাটনে ক্লিক করলে এই ফাংশন কাজ করবে (কমান্ডের বদলে)
 bot.hears('👑 Admin Panel', async (ctx) => {
     if (ctx.from.id.toString() !== process.env.ADMIN_ID) return;
-    ctx.reply('👑 **Taskesy Admin Panel**\nকী চেক করতে চান তা নির্বাচন করুন:', { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
+    ctx.reply('👑 **Taskesy Admin Panel**\nকী কন্ট্রোল করতে চান তা নির্বাচন করুন:', { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
 bot.action('ADMIN_INFO', (ctx) => ctx.answerCbQuery('এই বটটি আপনার দ্বারা নিয়ন্ত্রিত হচ্ছে! 👑', { show_alert: true }));
@@ -510,6 +616,11 @@ bot.action(/ADMIN_REJ_WD_(.+)/, async (ctx) => {
 bot.action('ADMIN_BROADCAST', (ctx) => {
     if (ctx.from.id.toString() !== process.env.ADMIN_ID) return;
     ctx.scene.enter('ADMIN_BROADCAST_WIZARD');
+});
+
+bot.action('ADMIN_TASK_MANAGE', (ctx) => {
+    if (ctx.from.id.toString() !== process.env.ADMIN_ID) return;
+    ctx.scene.enter('ADMIN_ADD_TASK_WIZARD');
 });
 
 // ==========================================
