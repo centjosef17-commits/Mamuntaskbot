@@ -5,7 +5,9 @@ const { faker } = require('@faker-js/faker');
 const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
-const xlsx = require('xlsx');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 // ==========================================
 // Anti-Crash System
@@ -598,7 +600,6 @@ bot.action('ADMIN_STATS', async (ctx) => {
     await ctx.editMessageText(`📊 **ড্যাশবোর্ড স্ট্যাটাস**\n━━━━━━━━━━━━━\n👥 মোট ইউজার: ${users} জন\n⏳ পেন্ডিং টাস্ক: ${tasks} টি\n💸 পেন্ডিং উইথড্র: ${wds} টি`, { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
-// Admin Settings
 bot.action('ADMIN_SETTINGS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const botStatus = await getSetting('botStatus', 'on');
@@ -625,7 +626,6 @@ bot.action(/SET_(botStatus|taskStatus|maintenance)_(on|off)/, async (ctx) => {
 });
 bot.action('SET_REF_COMMISSION', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_REF_COMM_WIZARD'); });
 
-// Task Manage Menu
 bot.action('ADMIN_TASK_MANAGE_MENU', (ctx) => {
     if (!checkAdmin(ctx)) return;
     ctx.editMessageText('🛠️ **Task Manage**\nকী করতে চান?', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
@@ -670,7 +670,7 @@ bot.action(/ADMIN_ET_DEL_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_LIVE_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// View Tasks (CSV Export Feature to prevent File Sync/Buffer Crash)
+// View Tasks (Export Custom Text CSV Feature without any external dependencies)
 bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
@@ -709,32 +709,43 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         }
 
         await ctx.reply("⏳ এক্সেল (CSV) ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
-        let exportData = [];
+        
         let isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
         
+        // Manual CSV Creation (Extremely lightweight, zero crash)
+        let header = isFB ? "UID,Password" : "Username,Password";
+        if (task.is2FA) header += ",2FA";
+        if (task.isCookie) header += ",Cookies";
+        header += ",Task ID\n";
+        
+        let csvData = header;
+        
         for (let sub of submissions) {
-            let row = {};
-            if (isFB) row['UID'] = sub.fbUid || 'N/A';
-            else row['Username'] = sub.username || sub.generatedEmail || 'N/A';
+            let col1 = isFB ? (sub.fbUid || 'N/A') : (sub.username || sub.generatedEmail || 'N/A');
+            let col2 = sub.password || 'N/A';
             
-            row['Password'] = sub.password || 'N/A';
-            if (task.is2FA) row['2FA'] = sub.secret2fa || 'N/A';
-            if (task.isCookie) row['Cookies'] = sub.cookie || 'N/A';
-            row['Task ID'] = sub.taskId;
+            let row = `"${col1}","${col2}"`;
+            if (task.is2FA) row += `,"${sub.secret2fa || 'N/A'}"`;
+            if (task.isCookie) row += `,"${sub.cookie || 'N/A'}"`;
+            row += `,"${sub.taskId}"\n`;
             
-            exportData.push(row);
+            csvData += row;
         }
         
-        const ws = xlsx.utils.json_to_sheet(exportData);
-        const csvString = xlsx.utils.sheet_to_csv(ws);
-        const buffer = Buffer.from(csvString, 'utf8');
+        let cleanTaskName = task.name.replace(/[^a-zA-Z0-9]/g, '_');
+        let fileName = completeToday ? `Today_${cleanTaskName}.csv` : `All_${cleanTaskName}.csv`;
         
-        let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.csv` : `All_${task.name.replace(/\s+/g, '_')}.csv`;
+        const tempFilePath = path.join(os.tmpdir(), fileName);
+        
+        // Adding UTF-8 BOM (\uFEFF) to make it correctly readable in Excel
+        fs.writeFileSync(tempFilePath, "\uFEFF" + csvData, 'utf8');
         
         await ctx.replyWithDocument(
-            { source: buffer, filename: fileName }, 
+            { source: tempFilePath, filename: fileName }, 
             { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' }
         );
+        
+        fs.unlinkSync(tempFilePath);
         
     } catch (err) {
         console.error("Export Error:", err);
@@ -752,7 +763,6 @@ bot.action(/ADMIN_VTX_ALL_(.+)/, async (ctx) => {
     await exportTasksToExcel(ctx, ctx.match[1], false);
 });
 
-// Admin Withdrawal Review
 bot.action('ADMIN_PENDING_WDS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const wd = await Withdrawal.findOne({ status: 'pending' }).populate('uid');
