@@ -6,6 +6,7 @@ const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
 const xlsx = require('xlsx');
+const fs = require('fs'); // নতুন যুক্ত করা হয়েছে ফাইল ডাউনলোডের সমস্যার জন্য
 
 // ==========================================
 // ১. MongoDB & Redis Setup 
@@ -655,7 +656,7 @@ bot.action(/ADMIN_ET_DEL_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_LIVE_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// View Tasks (Export Excel)
+// View Tasks (Export Excel File Fix)
 bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
@@ -690,7 +691,7 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         const submissions = await Submission.find(query);
         if (submissions.length === 0) {
             await ctx.answerCbQuery();
-            return ctx.reply("No Pending Task");
+            return ctx.reply("⚠️ No Pending Task");
         }
 
         await ctx.reply("⏳ এক্সেল ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
@@ -713,10 +714,21 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         const ws = xlsx.utils.json_to_sheet(exportData);
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, ws, "Tasks");
-        const buffer = Buffer.from(xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }));
         
+        // Render এ socket hang up ফিক্স করার জন্য লোকাল ফাইল সেভ করে পাঠানো হচ্ছে
+        const excelBuffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
         let fileName = completeToday ? `Today_${task.name.replace(/\s+/g, '_')}.xlsx` : `All_${task.name.replace(/\s+/g, '_')}.xlsx`;
-        await ctx.replyWithDocument({ source: buffer, filename: fileName }, { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' });
+        
+        fs.writeFileSync(fileName, excelBuffer);
+        
+        await ctx.replyWithDocument(
+            { source: fileName, filename: fileName }, 
+            { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' }
+        );
+        
+        // পাঠানোর পর ফাইল ডিলিট করে দেওয়া হচ্ছে
+        fs.unlinkSync(fileName);
+        
     } catch (err) {
         console.error("Export Error:", err);
         ctx.reply("❌ ফাইল ডাউনলোড করতে সমস্যা হয়েছে।");
