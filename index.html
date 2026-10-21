@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taskesy Admin Panel</title>
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .hidden { display: none !important; }
+        body { transition: background-color 0.3s ease; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans" id="mainBody">
+
+    <!-- ========================================== -->
+    <!-- ১. Login Screen (পাসওয়ার্ড প্রটেকশন)        -->
+    <!-- ========================================== -->
+    <div id="loginScreen" class="bg-white p-10 rounded-xl shadow-2xl w-96 text-center transform transition-all">
+        <div class="mb-6">
+            <span class="text-5xl">👑</span>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">Admin Panel</h2>
+        <input type="password" id="adminPassword" placeholder="Enter Admin Password" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg tracking-widest">
+        <button onclick="checkPassword()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition duration-300 shadow-md">
+            Login to Dashboard
+        </button>
+        <p id="errorMsg" class="text-red-500 mt-4 hidden font-semibold">❌ ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।</p>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ২. Main Dashboard (লগইন করার পর আসবে)      -->
+    <!-- ========================================== -->
+    <div id="dashboardScreen" class="w-full max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md hidden mt-10 mb-10">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-2xl font-bold text-gray-800">📋 Pending Tasks Dashboard</h1>
+            <button onclick="exportToExcel()" class="mt-4 md:mt-0 bg-green-600 text-white px-5 py-2.5 rounded shadow hover:bg-green-700 font-bold transition duration-300">
+                📥 Download to Excel
+            </button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="tasksTable">
+                <thead>
+                    <tr class="bg-gray-800 text-white">
+                        <th class="p-3 border border-gray-700">Task ID</th>
+                        <th class="p-3 border border-gray-700">Task Name</th>
+                        <th class="p-3 border border-gray-700">Username/UID</th>
+                        <th class="p-3 border border-gray-700">Password</th>
+                        <th class="p-3 border border-gray-700">2FA Code</th>
+                        <th class="p-3 border border-gray-700">Cookies</th>
+                        <th class="p-3 border border-gray-700 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody" class="text-gray-700">
+                    <tr><td colspan="7" class="text-center p-8 font-semibold text-lg text-gray-500">Loading pending tasks...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // আপনার Render API লিংক এবং পাসওয়ার্ড
+        const API_URL = "https://mamuntaskbot.onrender.com"; 
+        const ADMIN_PASS = "Admin#micro24@#";
+        let globalTasks = [];
+
+        // এন্টার (Enter) বাটন চাপলেই যাতে লগইন হয় তার ব্যবস্থা
+        document.getElementById("adminPassword").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                checkPassword();
+            }
+        });
+
+        // পাসওয়ার্ড চেকিং ফাংশন
+        function checkPassword() {
+            const pass = document.getElementById('adminPassword').value;
+            if(pass === ADMIN_PASS) {
+                // পাসওয়ার্ড ঠিক থাকলে লগইন স্ক্রিন হাইড করে ড্যাশবোর্ড আনা হবে
+                document.getElementById('loginScreen').classList.add('hidden');
+                const body = document.getElementById('mainBody');
+                body.classList.remove('items-center', 'justify-center');
+                body.classList.add('items-start');
+                document.getElementById('dashboardScreen').classList.remove('hidden');
+                
+                // ডাটাবেস থেকে টাস্ক লোড করা শুরু
+                loadTasks();
+            } else {
+                // পাসওয়ার্ড ভুল হলে এরর দেখানো
+                document.getElementById('errorMsg').classList.remove('hidden');
+            }
+        }
+
+        // Render এর API থেকে ডাটা লোড করা
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_URL}/api/pending`);
+                const tasks = await response.json();
+                globalTasks = tasks;
+                
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = '';
+
+                if(tasks.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-green-600 font-bold text-xl">✅ No Pending Tasks Found!</td></tr>';
+                    return;
+                }
+
+                tasks.forEach(task => {
+                    const tr = document.createElement('tr');
+                    tr.classList.add('border-b', 'hover:bg-blue-50', 'transition', 'duration-150');
+                    
+                    // Cookies এর বিশাল টেক্সট ছোট করে দেখানোর জন্য
+                    const cookieShort = task.cookie ? (task.cookie.length > 25 ? task.cookie.substring(0, 25) + '...' : task.cookie) : 'N/A';
+
+                    tr.innerHTML = `
+                        <td class="p-3 border font-mono text-sm">${task.taskId}</td>
+                        <td class="p-3 border font-semibold">${task.taskName}</td>
+                        <td class="p-3 border font-mono">${task.fbUid || task.username || task.generatedEmail || 'N/A'}</td>
+                        <td class="p-3 border font-mono text-red-600">${task.password || 'N/A'}</td>
+                        <td class="p-3 border font-mono font-bold text-blue-600">${task.secret2fa || 'N/A'}</td>
+                        <td class="p-3 border text-xs break-all max-w-xs cursor-pointer" title="${task.cookie || ''}">${cookieShort}</td>
+                        <td class="p-3 border text-center space-x-2 whitespace-nowrap">
+                            <button onclick="handleAction('${task._id}', 'approved')" class="bg-green-500 text-white px-4 py-1.5 rounded hover:bg-green-600 font-bold shadow transition">Approve</button>
+                            <button onclick="handleAction('${task._id}', 'rejected')" class="bg-red-500 text-white px-4 py-1.5 rounded hover:bg-red-600 font-bold shadow transition">Reject</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error fetching tasks:', error);
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" class="text-center p-8 text-red-500 font-bold">❌ Error connecting to the Bot Server. Please check if the bot is running on Render.</td></tr>';
+            }
+        }
+
+        // Approve বা Reject অ্যাকশন কন্ট্রোল
+        async function handleAction(id, action) {
+            const actionText = action === 'approved' ? 'Approve' : 'Reject';
+            if(!confirm(`Are you sure you want to ${actionText} this task?`)) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, action })
+                });
+                const result = await response.json();
+                
+                if(result.success) {
+                    // অ্যাকশন সফল হলে টেবিল রিফ্রেশ করা হবে
+                    loadTasks();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                alert('Request failed! Please check your connection.');
+            }
+        }
+
+        // ডাটাবেসের ডাটা এক্সেল (.xlsx) ফাইলে ডাউনলোড
+        function exportToExcel() {
+            if(globalTasks.length === 0) return alert("No pending tasks to export!");
+            
+            const exportData = globalTasks.map(task => ({
+                "Task ID": task.taskId,
+                "Task Name": task.taskName,
+                "Username/UID": task.fbUid || task.username || task.generatedEmail || 'N/A',
+                "Password": task.password || 'N/A',
+                "2FA Code": task.secret2fa || 'N/A',
+                "Cookies": task.cookie || 'N/A',
+                "Submitted Time": new Date(task.time).toLocaleString('en-GB')
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Pending Tasks");
+            XLSX.writeFile(wb, "Taskesy_Pending_Tasks.xlsx");
+        }
+    </script>
+</body>
+</html>
