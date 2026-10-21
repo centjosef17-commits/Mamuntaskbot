@@ -1,0 +1,18 @@
+{
+  "name": "taskesy-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for Taskesy",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
+    "otpauth": "^9.3.1",
+    "telegraf": "^4.16.3",
+    "ioredis": "^5.3.2"
+  }
+}
