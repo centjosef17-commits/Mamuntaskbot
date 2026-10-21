@@ -5,9 +5,6 @@ const { faker } = require('@faker-js/faker');
 const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 
 // ==========================================
 // Anti-Crash System
@@ -588,7 +585,7 @@ bot.hears('👑 Admin Panel', async (ctx) => {
     ctx.reply('👑 **Taskesy Admin Panel**\nকী কন্ট্রোল করতে চান তা নির্বাচন করুন:', { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
-bot.action('ADMIN_INFO', (ctx) => ctx.answerCbQuery('এই বটটি আপনার দ্বারা নিয়ন্ত্রিত হচ্ছে! 👑', { show_alert: true }));
+bot.action('ADMIN_INFO', (ctx) => ctx.answerCbQuery('এই বটটি আপনার দ্বারা নিয়ন্ত্রিত হচ্ছে! 👑', { show_alert: true }));
 bot.action('ADMIN_MAIN', (ctx) => {
     if (!checkAdmin(ctx)) return;
     ctx.editMessageText('👑 **Taskesy Admin Panel**\nকী কন্ট্রোল করতে চান তা নির্বাচন করুন:', { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
@@ -600,6 +597,7 @@ bot.action('ADMIN_STATS', async (ctx) => {
     await ctx.editMessageText(`📊 **ড্যাশবোর্ড স্ট্যাটাস**\n━━━━━━━━━━━━━\n👥 মোট ইউজার: ${users} জন\n⏳ পেন্ডিং টাস্ক: ${tasks} টি\n💸 পেন্ডিং উইথড্র: ${wds} টি`, { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
+// Admin Settings
 bot.action('ADMIN_SETTINGS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const botStatus = await getSetting('botStatus', 'on');
@@ -626,6 +624,7 @@ bot.action(/SET_(botStatus|taskStatus|maintenance)_(on|off)/, async (ctx) => {
 });
 bot.action('SET_REF_COMMISSION', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_REF_COMM_WIZARD'); });
 
+// Task Manage Menu
 bot.action('ADMIN_TASK_MANAGE_MENU', (ctx) => {
     if (!checkAdmin(ctx)) return;
     ctx.editMessageText('🛠️ **Task Manage**\nকী করতে চান?', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
@@ -643,12 +642,12 @@ bot.action('ADMIN_LIVE_TASKS', async (ctx) => {
     if (tasks.length === 0) return ctx.answerCbQuery('কোনো লাইভ টাস্ক নেই!', { show_alert: true });
     let btns = tasks.map(t => [{ text: `⚡ ${t.name} (৳${t.price})`, callback_data: `ADMIN_EDIT_T_${t._id}` }]);
     btns.push([{ text: '🔙 Back', callback_data: 'ADMIN_TASK_MANAGE_MENU', style: 'danger' }]);
-    ctx.editMessageText('📝 **এডিট বা ডিলিট করতে যেকোনো একটি লাইভ টাস্ক সিলেক্ট করুন:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
+    ctx.editMessageText('📝 **এডিট বা ডিলিট কৰিবলৈ যিকোনো এটা লাইভ টাস্ক চিলেক্ট কৰক:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
 });
 
 bot.action(/ADMIN_EDIT_T_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return;
-    const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
+    const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পোৱা হোৱা নাই!');
     ctx.editMessageText(`📝 **Task Manage:** ${task.name}\n💰 Price: ৳${task.price}\n🔐 Pass: \`${task.password}\``, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
         [{ text: '💰 Edit Price', callback_data: `ADMIN_ET_PRICE_${task._id}`, style: 'primary' }, { text: '🔐 Edit Pass', callback_data: `ADMIN_ET_PASS_${task._id}`, style: 'primary' }],
         [{ text: '🗑️ Delete Task', callback_data: `ADMIN_ET_DEL_${task._id}`, style: 'danger' }],
@@ -666,7 +665,7 @@ bot.action(/ADMIN_ET_PASS_(.+)/, async (ctx) => {
 });
 bot.action(/ADMIN_ET_DEL_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return; await Task.findByIdAndDelete(ctx.match[1]);
-    await ctx.answerCbQuery('টাস্কটি ডিলিট করা হয়েছে!', { show_alert: true });
+    await ctx.answerCbQuery('টাস্ক ডিলিট কৰা হৈছে!', { show_alert: true });
     bot.handleUpdate({ callback_query: { data: 'ADMIN_LIVE_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
@@ -677,13 +676,13 @@ bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (tasks.length === 0) return ctx.answerCbQuery('কোনো লাইভ টাস্ক নেই!', { show_alert: true });
     let btns = tasks.map(t => [{ text: `📋 ${t.name}`, callback_data: `ADMIN_VTM_${t._id}`, style: 'primary' }]); 
     btns.push([{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'danger' }]);
-    ctx.editMessageText('📋 **কোন টাস্কের ডাটা ডাউনলোড করতে চান তা সিলেক্ট করুন:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
+    ctx.editMessageText('📋 **কোন টাস্কৰ ডাটা ডাউনলোড কৰিব বিচাৰে চিলেক্ট কৰক:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
 });
 
 bot.action(/ADMIN_VTM_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return;
-    const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
-    ctx.editMessageText(`📋 **View Task:** ${task.name}\n\nকীভাবে ডাটা ডাউনলোড করতে চান?`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
+    const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পোৱা হোৱা নাই!');
+    ctx.editMessageText(`📋 **View Task:** ${task.name}\n\nকিদৰে ডাটা ডাউনলোড কৰিব বিচাৰে?`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
         [{ text: '✅ Complete Today', callback_data: `ADMIN_VTX_CT_${task._id}`, style: 'success' }],
         [{ text: '📥 Download Live Task', callback_data: `ADMIN_VTX_ALL_${task._id}`, style: 'primary' }],
         [{ text: '🔙 Back', callback_data: 'ADMIN_VIEW_TASKS', style: 'danger' }]
@@ -693,7 +692,7 @@ bot.action(/ADMIN_VTM_(.+)/, async (ctx) => {
 async function exportTasksToExcel(ctx, taskId, completeToday) {
     try {
         const task = await Task.findById(taskId);
-        if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
+        if (!task) return ctx.answerCbQuery('টাস্ক পোৱা হোৱা নাই!');
         
         let query = { activeTaskId: taskId.toString() };
         if (completeToday) {
@@ -708,11 +707,11 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
             return ctx.reply("⚠️ No Pending Task");
         }
 
-        await ctx.reply("⏳ এক্সেল (CSV) ফাইল তৈরি হচ্ছে, দয়া করে অপেক্ষা করুন...");
+        await ctx.reply("⏳ এক্সেল (CSV) ফাইল প্ৰস্তুত কৰা হৈছে, অনুগ্ৰহ কৰি অপেক্ষা কৰক...");
         
         let isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
         
-        // Manual CSV Creation (Extremely lightweight, zero crash)
+        // Manual CSV Creation 
         let header = isFB ? "UID,Password" : "Username,Password";
         if (task.is2FA) header += ",2FA";
         if (task.isCookie) header += ",Cookies";
@@ -735,21 +734,17 @@ async function exportTasksToExcel(ctx, taskId, completeToday) {
         let cleanTaskName = task.name.replace(/[^a-zA-Z0-9]/g, '_');
         let fileName = completeToday ? `Today_${cleanTaskName}.csv` : `All_${cleanTaskName}.csv`;
         
-        const tempFilePath = path.join(os.tmpdir(), fileName);
-        
-        // Adding UTF-8 BOM (\uFEFF) to make it correctly readable in Excel
-        fs.writeFileSync(tempFilePath, "\uFEFF" + csvData, 'utf8');
+        // Buffer created in RAM
+        const fileBuffer = Buffer.from("\uFEFF" + csvData, 'utf8');
         
         await ctx.replyWithDocument(
-            { source: tempFilePath, filename: fileName }, 
-            { caption: `✅ **${task.name}** এর মোট ${submissions.length} টি ডাটা এক্সপোর্ট করা হয়েছে।\n(Google Sheet বা Excel অ্যাপ দিয়ে ফাইলটি ওপেন করুন)`, parse_mode: 'Markdown' }
+            { source: fileBuffer, filename: fileName }, 
+            { caption: `✅ **${task.name}** ৰ মুঠ ${submissions.length} টা ডাটা এক্সপোৰ্ট কৰা হৈছে।\n(Google Sheet বা Excel এপ্পৰ জৰিয়তে ফাইলটো অ'পেন কৰক)`, parse_mode: 'Markdown' }
         );
-        
-        fs.unlinkSync(tempFilePath);
         
     } catch (err) {
         console.error("Export Error:", err);
-        ctx.reply("❌ ফাইল ডাউনলোড করতে সমস্যা হয়েছে।");
+        ctx.reply("❌ ফাইল ডাউনলোড কৰাত সমস্যা হৈছে।");
     }
 }
 
@@ -766,7 +761,7 @@ bot.action(/ADMIN_VTX_ALL_(.+)/, async (ctx) => {
 bot.action('ADMIN_PENDING_WDS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const wd = await Withdrawal.findOne({ status: 'pending' }).populate('uid');
-    if (!wd) return ctx.editMessageText('✅ এই মুহূর্তে কোনো পেন্ডিং উইথড্র নেই!', { reply_markup: getAdminMenu() });
+    if (!wd) return ctx.editMessageText('✅ এই মুহূৰ্তত কোনো পেন্ডিং উইথড্ৰ নাই!', { reply_markup: getAdminMenu() });
     
     let text = `💸 **Withdrawal Review**\n━━━━━━━━━━━━━\n👤 **Name:** ${wd.name}\n💰 **Amount:** ৳${wd.amount}\n🎁 **Net Payable:** ৳${wd.netAmount}\n\n💳 **Method:** ${wd.method.toUpperCase()}\n🏦 **Account:** \`${wd.account}\``;
     
@@ -778,13 +773,13 @@ bot.action('ADMIN_PENDING_WDS', async (ctx) => {
 
 bot.action(/ADMIN_APP_WD_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return; const wd = await Withdrawal.findById(ctx.match[1]);
-    if (wd && wd.status === 'pending') { await Withdrawal.findByIdAndUpdate(wd._id, { status: 'approved' }); await User.findByIdAndUpdate(wd.uid, { withdrawStatus: 'Completed' }); await ctx.answerCbQuery('পেমেন্ট সাকসেস করা হয়েছে!'); }
+    if (wd && wd.status === 'pending') { await Withdrawal.findByIdAndUpdate(wd._id, { status: 'approved' }); await User.findByIdAndUpdate(wd.uid, { withdrawStatus: 'Completed' }); await ctx.answerCbQuery('পেমেন্ট সাকসেস কৰা হৈছে!'); }
     bot.handleUpdate({ callback_query: { data: 'ADMIN_PENDING_WDS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
 bot.action(/ADMIN_REJ_WD_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return; const wd = await Withdrawal.findById(ctx.match[1]);
-    if (wd && wd.status === 'pending') { await Withdrawal.findByIdAndUpdate(wd._id, { status: 'rejected' }); await User.findByIdAndUpdate(wd.uid, { $inc: { earned: wd.amount }, withdrawStatus: 'Refunded' }); await ctx.answerCbQuery('উইথড্র বাতিল এবং রিফান্ড করা হয়েছে!'); }
+    if (wd && wd.status === 'pending') { await Withdrawal.findByIdAndUpdate(wd._id, { status: 'rejected' }); await User.findByIdAndUpdate(wd.uid, { $inc: { earned: wd.amount }, withdrawStatus: 'Refunded' }); await ctx.answerCbQuery('উইথড্ৰ বাতিল আৰু ৰিফাণ্ড কৰা হৈছে!'); }
     bot.handleUpdate({ callback_query: { data: 'ADMIN_PENDING_WDS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
@@ -809,7 +804,7 @@ setInterval(async () => {
 
             if (sub.uid && sub.uid.telegramId) {
                 const lang = sub.uid.language || 'bn';
-                let msg = sub.status === 'approved' ? (lang === 'bn' ? `✅ **টাস্ক অপ্প্রভড!**\nআপনার টাস্কটি (ID: \`${sub.taskId}\`) সফলভাবে গ্রহণ করা হয়েছে।\n💰 আপনার ব্যালেন্সে **৳${sub.price}** অ্যাড হয়েছে।` : `✅ **Task Approved!**\nYour task (ID: \`${sub.taskId}\`) was accepted.\n💰 **৳${sub.price}** added to your balance.`) : (lang === 'bn' ? `❌ **টাস্ক রিজেক্টেড!**\nআপনার সাবমিট করা টাস্কটি (ID: \`${sub.taskId}\`) বাতিল করা হয়েছে।\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **কারণ:** Rejected for Blocked / Invalid Data.` : `❌ **Task Rejected!**\nYour submitted task (ID: \`${sub.taskId}\`) was declined.\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **Reason:** Rejected for Blocked / Invalid Data.`);
+                let msg = sub.status === 'approved' ? (lang === 'bn' ? `✅ **টাস্ক অপ্প্রভড!**\nআপোনাৰ টাস্কটি (ID: \`${sub.taskId}\`) সফলতাৰে গ্ৰহণ কৰা হৈছে।\n💰 আপোনাৰ বেলেঞ্চত **৳${sub.price}** যোগ হৈছে।` : `✅ **Task Approved!**\nYour task (ID: \`${sub.taskId}\`) was accepted.\n💰 **৳${sub.price}** added to your balance.`) : (lang === 'bn' ? `❌ **টাস্ক ৰিজেক্টেড!**\nআপুনি ছাবমিট কৰা টাস্কটি (ID: \`${sub.taskId}\`) বাতিল কৰা হৈছে।\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **কাৰণ:** Rejected for Blocked / Invalid Data.` : `❌ **Task Rejected!**\nYour submitted task (ID: \`${sub.taskId}\`) was declined.\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **Reason:** Rejected for Blocked / Invalid Data.`);
                 await bot.telegram.sendMessage(sub.uid.telegramId, msg, { parse_mode: 'Markdown' }).catch(()=>{}); await Submission.findByIdAndUpdate(sub._id, { tgNotified: true });
             }
         }
@@ -817,7 +812,7 @@ setInterval(async () => {
         for (const w of withdrawals) {
             if (w.uid && w.uid.telegramId) {
                 const lang = w.uid.language || 'bn';
-                let msg = w.status === 'approved' ? (lang === 'bn' ? `🎉 **পেমেন্ট কমপ্লিট!**\nআপনার ৳${w.amount} উইথড্র রিকোয়েস্টটি অপ্প্রভ করা হয়েছে এবং আপনার ${w.method.toUpperCase()} নাম্বারে পেমেন্ট পাঠানো হয়েছে।\n\nধন্যবাদ Taskesy এর সাথে থাকার জন্য!` : `🎉 **Payment Complete!**\nYour ৳${w.amount} withdrawal request has been approved and sent to your ${w.method.toUpperCase()} number.\n\nThank you for staying with Taskesy!`) : (lang === 'bn' ? `⚠️ **উইথড্র রিজেক্টেড!**\nআপনার ৳${w.amount} উইথড্র রিকোয়েস্টটি এডমিন বাতিল করেছেন এবং এমাউন্টটি আপনার ব্যালেন্সে রিফান্ড করা হয়েছে।\n\nদয়া করে সঠিক একাউন্ট ডিটেইলস দিয়ে পুনরায় রিকোয়েস্ট দিন।` : `⚠️ **Withdrawal Rejected!**\nYour ৳${w.amount} withdrawal request was cancelled by the admin and refunded to your balance.\n\nPlease request again with correct account details.`);
+                let msg = w.status === 'approved' ? (lang === 'bn' ? `🎉 **পেমেন্ট কমপ্লিট!**\nআপোনাৰ ৳${w.amount} উইথড্ৰ ৰিকুয়েষ্টটি অপ্ৰুভ কৰা হৈছে আৰু আপোনাৰ ${w.method.toUpperCase()} নম্বৰত পেমেন্ট পঠোৱা হৈছে।\n\nধন্যবাদ Taskesy ৰ লগত থকাৰ বাবে!` : `🎉 **Payment Complete!**\nYour ৳${w.amount} withdrawal request has been approved and sent to your ${w.method.toUpperCase()} number.\n\nThank you for staying with Taskesy!`) : (lang === 'bn' ? `⚠️ **উইথড্ৰ ৰিজেক্টেড!**\nআপোনাৰ ৳${w.amount} উইথড্ৰ ৰিকুয়েষ্টটি এডমিনে বাতিল কৰিছে আৰু এমাউন্টটি আপোনাৰ বেলেঞ্চত ৰিফাণ্ড কৰা হৈছে।\n\nঅনুগ্ৰহ কৰি সঠিক একাউন্ট ডিটেইলচ দি পুনৰ ৰিকুয়েষ্ট দিয়ক।` : `⚠️ **Withdrawal Rejected!**\nYour ৳${w.amount} withdrawal request was cancelled by the admin and refunded to your balance.\n\nPlease request again with correct account details.`);
                 await bot.telegram.sendMessage(w.uid.telegramId, msg, { parse_mode: 'Markdown' }).catch(()=>{}); await Withdrawal.findByIdAndUpdate(w._id, { tgNotified: true });
             }
         }
