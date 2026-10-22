@@ -3,96 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Taskesy Admin Pro Dashboard</title>
+    <title>TaskMaster Pro Admin</title>
+    <!-- Tailwind CSS for Smooth UI -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Exact XLSX Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- SweetAlert2 for Professional Popups -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         .hidden { display: none !important; }
-        .tab-btn.active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .tab-btn.active { background-color: #2563eb; color: white; border-radius: 0.5rem; }
+        .tab-btn { transition: all 0.3s ease; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        .glass-panel { background: white; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans text-gray-800" id="mainBody">
+<body id="mainBody">
 
-    <!-- Login Screen -->
-    <div id="loginScreen" class="flex items-center justify-center h-screen transition-all">
-        <div class="bg-white p-10 rounded-2xl shadow-2xl w-96 text-center">
-            <span class="text-6xl mb-4 block">👑</span>
-            <h2 class="text-2xl font-bold mb-6">Admin Panel</h2>
-            <input type="password" id="adminPassword" placeholder="Enter Password" class="w-full p-3 border rounded-lg mb-4 text-center tracking-widest focus:ring-2 focus:ring-blue-500 outline-none">
-            <button onclick="checkPassword()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow">Login</button>
-            <p id="errorMsg" class="text-red-500 mt-4 hidden font-semibold">❌ Invalid Password!</p>
+    <!-- ========================================== -->
+    <!-- ১. Login Screen -->
+    <!-- ========================================== -->
+    <div id="loginScreen" class="flex items-center justify-center min-h-screen">
+        <div class="glass-panel p-10 w-96 text-center transform transition-all hover:scale-105">
+            <div class="text-6xl mb-6 text-blue-600"><i class="fa-solid fa-user-shield"></i></div>
+            <h2 class="text-3xl font-extrabold text-gray-800 mb-2">Admin Panel</h2>
+            <p class="text-gray-500 mb-8">Secure login required</p>
+            <input type="password" id="adminPassword" placeholder="Enter Password" class="w-full p-4 border border-gray-200 rounded-xl mb-6 text-center text-xl tracking-widest focus:ring-2 focus:ring-blue-500 outline-none transition">
+            <button onclick="checkPassword()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 shadow-lg transition">Login to Dashboard</button>
         </div>
     </div>
 
-    <!-- Main Dashboard -->
+    <!-- ========================================== -->
+    <!-- ২. Main Dashboard -->
+    <!-- ========================================== -->
     <div id="dashboardScreen" class="hidden flex flex-col md:flex-row min-h-screen">
         
-        <!-- Sidebar -->
-        <div class="w-full md:w-64 bg-gray-900 text-white shadow-lg p-6">
-            <h2 class="text-2xl font-bold mb-8 flex items-center gap-2">👑 Taskesy</h2>
-            <nav class="space-y-4">
-                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="tab-btn w-full text-left py-2 px-4 rounded hover:bg-gray-800 transition active bg-gray-800">📊 Dashboard (Live)</button>
-                <button onclick="switchTab('history')" id="nav-history" class="tab-btn w-full text-left py-2 px-4 rounded hover:bg-gray-800 transition">📂 History Tasks</button>
-                <button onclick="switchTab('report')" id="nav-report" class="tab-btn w-full text-left py-2 px-4 rounded hover:bg-gray-800 transition">⚙️ Report Manage</button>
+        <!-- Sidebar Navigation -->
+        <div class="w-full md:w-72 bg-white shadow-xl flex flex-col">
+            <div class="p-6 border-b border-gray-100 flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg"><i class="fa-solid fa-crown"></i></div>
+                <h2 class="text-2xl font-black text-gray-800 tracking-tight">Task Master Pro</h2>
+            </div>
+            <nav class="flex-1 p-4 space-y-2">
+                <button onclick="switchTab('live')" id="nav-live" class="tab-btn active w-full text-left py-3 px-5 text-gray-600 font-semibold flex items-center gap-3">
+                    <i class="fa-solid fa-bolt"></i> Live Tasks
+                </button>
+                <button onclick="switchTab('history')" id="nav-history" class="tab-btn w-full text-left py-3 px-5 text-gray-600 font-semibold flex items-center gap-3">
+                    <i class="fa-solid fa-folder-open"></i> History Tasks
+                </button>
+                <button onclick="switchTab('report')" id="nav-report" class="tab-btn w-full text-left py-3 px-5 text-gray-600 font-semibold flex items-center gap-3">
+                    <i class="fa-solid fa-list-check"></i> Report Manage
+                </button>
             </nav>
+            <div class="p-4 border-t border-gray-100">
+                <p class="text-xs text-center text-gray-400 font-semibold">API Connected 🟢</p>
+            </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="flex-1 p-8 overflow-x-hidden">
+        <!-- Main Content Area -->
+        <div class="flex-1 p-4 md:p-10 overflow-x-hidden">
             
-            <!-- Dashboard Tab -->
-            <div id="tab-dashboard">
-                <div class="flex justify-between items-center mb-6 border-b pb-4">
-                    <h1 class="text-3xl font-bold">Live Tasks</h1>
-                    <select id="taskSelect" onchange="loadSubmissions(false)" class="p-2 border rounded-lg shadow-sm focus:ring focus:ring-blue-200 outline-none bg-white font-semibold">
+            <!-- Live Tasks Tab -->
+            <div id="tab-live" class="fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-800">Live Tasks</h1>
+                        <p class="text-gray-500 mt-1">Select a task to view and download the Google Sheet.</p>
+                    </div>
+                    <select id="liveTaskSelect" onchange="loadSubmissions(false)" class="w-full md:w-64 p-3 border-2 border-blue-100 rounded-xl shadow-sm focus:ring focus:ring-blue-200 outline-none font-bold text-gray-700 bg-white cursor-pointer transition">
                         <option value="">Select a Task...</option>
                     </select>
                 </div>
                 
-                <div class="flex gap-4 mb-4" id="dashboardActions" style="display: none;">
-                    <button onclick="exportToCSV(false)" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow font-semibold">📥 Download Sheet (CSV)</button>
-                    <button onclick="completeToday()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow font-semibold">✅ Complete Today</button>
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-4 mb-6" id="liveActions" style="display: none;">
+                    <button onclick="exportToXLSX(false)" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 shadow-md font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel"></i> Download Sheet
+                    </button>
+                    <button onclick="completeToday()" class="bg-emerald-500 text-white px-6 py-3 rounded-xl hover:bg-emerald-600 shadow-md font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-check-double"></i> Complete Today
+                    </button>
                 </div>
 
-                <div class="bg-white rounded-lg shadow overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead><tr class="bg-gray-100"><th class="p-3 border">Task ID</th><th class="p-3 border">UID/Username</th><th class="p-3 border">Password</th><th class="p-3 border">2FA</th><th class="p-3 border">Cookies</th><th class="p-3 border">Date</th></tr></thead>
-                        <tbody id="tableBodyLive"><tr><td colspan="6" class="p-4 text-center text-gray-500">Please select a task to view data.</td></tr></tbody>
-                    </table>
+                <!-- Table Preview -->
+                <div class="glass-panel overflow-hidden border border-gray-100">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse whitespace-nowrap">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider" id="liveTableHeader">
+                                    <th class="p-4">Please select a task</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBodyLive" class="text-sm">
+                                <tr><td class="p-8 text-center text-gray-400 font-medium">No data selected</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            <!-- History Tab -->
-            <div id="tab-history" class="hidden">
-                <div class="flex justify-between items-center mb-6 border-b pb-4">
-                    <h1 class="text-3xl font-bold">History Tasks</h1>
-                    <select id="historyTaskSelect" onchange="loadSubmissions(true)" class="p-2 border rounded-lg shadow-sm focus:ring focus:ring-blue-200 outline-none bg-white font-semibold">
+            <!-- History Tasks Tab -->
+            <div id="tab-history" class="hidden fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-800">History Tasks</h1>
+                        <p class="text-gray-500 mt-1">View previously completed tasks.</p>
+                    </div>
+                    <select id="historyTaskSelect" onchange="loadSubmissions(true)" class="w-full md:w-64 p-3 border-2 border-blue-100 rounded-xl shadow-sm focus:ring focus:ring-blue-200 outline-none font-bold text-gray-700 bg-white cursor-pointer transition">
                         <option value="">Select a Task...</option>
                     </select>
                 </div>
                 
-                <div class="flex gap-4 mb-4" id="historyActions" style="display: none;">
-                    <button onclick="exportToCSV(true)" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow font-semibold">📥 Download History</button>
-                    <button onclick="deleteAllHistory()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 shadow font-semibold">🗑️ Delete All History</button>
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-4 mb-6" id="historyActions" style="display: none;">
+                    <button onclick="exportToXLSX(true)" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 shadow-md font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel"></i> Download Sheet
+                    </button>
+                    <button onclick="deleteAllHistory()" class="bg-red-500 text-white px-6 py-3 rounded-xl hover:bg-red-600 shadow-md font-bold transition flex items-center gap-2 ml-auto">
+                        <i class="fa-solid fa-trash-can"></i> Delete All History
+                    </button>
                 </div>
 
-                <div class="bg-white rounded-lg shadow overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead><tr class="bg-gray-100"><th class="p-3 border">Task ID</th><th class="p-3 border">UID/Username</th><th class="p-3 border">Password</th><th class="p-3 border">2FA</th><th class="p-3 border">Cookies</th><th class="p-3 border">Date</th></tr></thead>
-                        <tbody id="tableBodyHistory"><tr><td colspan="6" class="p-4 text-center text-gray-500">Please select a task to view history.</td></tr></tbody>
-                    </table>
+                <!-- Table Preview -->
+                <div class="glass-panel overflow-hidden border border-gray-100">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse whitespace-nowrap">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-xs tracking-wider" id="historyTableHeader">
+                                    <th class="p-4">Please select a task</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBodyHistory" class="text-sm">
+                                <tr><td class="p-8 text-center text-gray-400 font-medium">No data selected</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             <!-- Report Manage Tab -->
-            <div id="tab-report" class="hidden">
-                <h1 class="text-3xl font-bold mb-6 border-b pb-4">Bulk Report Manage</h1>
-                <div class="bg-white p-6 rounded-lg shadow max-w-3xl">
-                    <label class="block font-semibold mb-2 text-gray-700">Paste Task IDs (Comma or newline separated):</label>
-                    <textarea id="bulkTaskIds" rows="8" class="w-full p-4 border rounded-lg mb-4 focus:ring focus:ring-blue-200 outline-none font-mono" placeholder="WP-12345&#10;WP-67890"></textarea>
-                    
-                    <div class="flex gap-4">
-                        <button onclick="processBulkAction('approved')" class="flex-1 bg-green-500 text-white font-bold py-3 rounded-lg hover:bg-green-600 shadow">✅ Approve All</button>
-                        <button onclick="processBulkAction('rejected')" class="flex-1 bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 shadow">❌ Reject All</button>
+            <div id="tab-report" class="hidden fade-in">
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-gray-800">Report Manage</h1>
+                    <p class="text-gray-500 mt-1">Paste Task IDs to Bulk Approve or Reject easily.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Approve Box -->
+                    <div class="glass-panel p-6 border-t-4 border-emerald-500 transition hover:shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2"><i class="fa-solid fa-check-circle text-emerald-500"></i> Approve Tasks</h3>
+                        <p class="text-sm text-gray-500 mb-4">Paste IDs below (one per line or comma separated)</p>
+                        <textarea id="approveIds" rows="8" class="w-full p-4 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-emerald-200 outline-none font-mono text-sm bg-gray-50" placeholder="WP-12345&#10;WP-67890"></textarea>
+                        <button onclick="processBulkAction('approved')" class="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl hover:bg-emerald-600 shadow transition flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-check"></i> Approve All
+                        </button>
+                    </div>
+
+                    <!-- Reject Box -->
+                    <div class="glass-panel p-6 border-t-4 border-red-500 transition hover:shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2"><i class="fa-solid fa-times-circle text-red-500"></i> Reject Tasks</h3>
+                        <p class="text-sm text-gray-500 mb-4">Paste IDs below (one per line or comma separated)</p>
+                        <textarea id="rejectIds" rows="8" class="w-full p-4 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-red-200 outline-none font-mono text-sm bg-gray-50" placeholder="WP-11111&#10;WP-22222"></textarea>
+                        <button onclick="processBulkAction('rejected')" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 shadow transition flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-xmark"></i> Reject All
+                        </button>
                     </div>
                 </div>
             </div>
@@ -101,18 +178,21 @@
     </div>
 
     <script>
+        // ==========================================
+        // API Configuration (আপনার Render বটের লিংক)
+        // ==========================================
         const API_URL = "https://mamuntaskbot.onrender.com"; 
         const ADMIN_PASS = "Admin#micro24@#";
         
         let globalTasks = [];
         let currentSubmissions = [];
-        let currentTaskType = '';
+        let selectedTaskObj = null;
 
-        document.getElementById("adminPassword").addEventListener("keypress", e => { if (e.key === "Enter") checkPassword(); });
-
+        // Login System
         function checkPassword() {
             if(document.getElementById('adminPassword').value === ADMIN_PASS) {
                 document.getElementById('loginScreen').classList.add('hidden');
+                document.body.classList.remove('flex', 'items-center', 'justify-center');
                 document.getElementById('dashboardScreen').classList.remove('hidden');
                 fetchAllTasks();
             } else {
@@ -120,142 +200,225 @@
             }
         }
 
+        // Tab Switching
         function switchTab(tabId) {
-            ['dashboard', 'history', 'report'].forEach(t => {
+            ['live', 'history', 'report'].forEach(t => {
                 document.getElementById(`tab-${t}`).classList.add('hidden');
-                document.getElementById(`nav-${t}`).classList.remove('bg-gray-800', 'border-l-4', 'border-blue-500');
+                document.getElementById(`nav-${t}`).classList.remove('active', 'bg-blue-600', 'text-white');
+                document.getElementById(`nav-${t}`).classList.add('text-gray-600');
             });
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-            document.getElementById(`nav-${tabId}`).classList.add('bg-gray-800', 'border-l-4', 'border-blue-500');
+            document.getElementById(`nav-${tabId}`).classList.add('active', 'bg-blue-600', 'text-white');
+            document.getElementById(`nav-${tabId}`).classList.remove('text-gray-600');
         }
 
+        // Fetch Tasks for Dropdown
         async function fetchAllTasks() {
             try {
                 const res = await fetch(`${API_URL}/api/tasks`);
                 globalTasks = await res.json();
                 
-                const selectLive = document.getElementById('taskSelect');
+                const selectLive = document.getElementById('liveTaskSelect');
                 const selectHistory = document.getElementById('historyTaskSelect');
-                selectLive.innerHTML = '<option value="">Select a Task...</option>';
-                selectHistory.innerHTML = '<option value="">Select a Task...</option>';
-
-                globalTasks.forEach(t => {
-                    const opt = `<option value="${t._id}" data-type="${t.type}">${t.name} (৳${t.price})</option>`;
-                    selectLive.innerHTML += opt;
-                    selectHistory.innerHTML += opt;
-                });
-            } catch(e) { alert("Error connecting to server!"); }
+                
+                let options = '<option value="">Select a Task...</option>';
+                globalTasks.forEach(t => { options += `<option value="${t._id}">${t.name}</option>`; });
+                
+                selectLive.innerHTML = options;
+                selectHistory.innerHTML = options;
+            } catch(e) { 
+                Swal.fire('Error!', 'Could not connect to Bot API. Ensure Render is running.', 'error'); 
+            }
         }
 
-        async function loadSubmissions(isHistory) {
-            const selectId = isHistory ? 'historyTaskSelect' : 'taskSelect';
-            const tbodyId = isHistory ? 'tableBodyHistory' : 'tableBodyLive';
-            const actionDivId = isHistory ? 'historyActions' : 'dashboardActions';
+        // Build Dynamic Headers logic
+        function getHeadersHTML(task) {
+            const isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
+            let html = ``;
+            html += `<th class="p-4 border-b">Task ID</th>`;
+            html += `<th class="p-4 border-b">${isFB ? 'UID' : 'Username'}</th>`;
+            html += `<th class="p-4 border-b">Password</th>`;
+            if (task.is2FA) html += `<th class="p-4 border-b">2FA Key</th>`;
+            if (task.isCookie) html += `<th class="p-4 border-b">Cookies</th>`;
+            return html;
+        }
+
+        // Generate columns data
+        function getRowHTML(sub, task) {
+            const isFB = ['fb', 'facebook'].includes(task.type.toLowerCase());
+            const col1 = isFB ? (sub.fbUid || 'N/A') : (sub.username || sub.generatedEmail || 'N/A');
+            const cookieShort = sub.cookie ? (sub.cookie.length > 20 ? sub.cookie.substring(0,20)+'...' : sub.cookie) : 'N/A';
             
-            const select = document.getElementById(selectId);
-            const taskId = select.value;
-            currentTaskType = select.options[select.selectedIndex]?.getAttribute('data-type') || '';
+            let html = `<td class="p-4 border-b font-mono font-bold text-blue-600">${sub.taskId}</td>`;
+            html += `<td class="p-4 border-b font-mono">${col1}</td>`;
+            html += `<td class="p-4 border-b font-mono text-red-500">${sub.password || 'N/A'}</td>`;
+            if (task.is2FA) html += `<td class="p-4 border-b font-mono text-emerald-600">${sub.secret2fa || 'N/A'}</td>`;
+            if (task.isCookie) html += `<td class="p-4 border-b text-xs text-gray-500 cursor-pointer" title="${sub.cookie||''}">${cookieShort}</td>`;
+            return html;
+        }
+
+        // Load Submissions into Table
+        async function loadSubmissions(isHistory) {
+            const selectId = isHistory ? 'historyTaskSelect' : 'liveTaskSelect';
+            const tbodyId = isHistory ? 'tableBodyHistory' : 'tableBodyLive';
+            const theadId = isHistory ? 'historyTableHeader' : 'liveTableHeader';
+            const actionDivId = isHistory ? 'historyActions' : 'liveActions';
+            
+            const taskId = document.getElementById(selectId).value;
             const tbody = document.getElementById(tbodyId);
+            const thead = document.getElementById(theadId);
 
             if(!taskId) {
                 document.getElementById(actionDivId).style.display = 'none';
-                tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">Please select a task.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 font-medium">Please select a task.</td></tr>';
+                thead.innerHTML = '<th class="p-4">Please select a task</th>';
                 return;
             }
 
-            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center">Loading data...</td></tr>';
+            selectedTaskObj = globalTasks.find(t => t._id === taskId);
+            thead.innerHTML = getHeadersHTML(selectedTaskObj);
+            tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center"><i class="fa-solid fa-spinner fa-spin text-blue-600 text-2xl"></i> Loading data...</td></tr>`;
+            
             try {
                 const res = await fetch(`${API_URL}/api/submissions/${taskId}?history=${isHistory}`);
                 currentSubmissions = await res.json();
                 
                 if(currentSubmissions.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500 font-bold">No ${isHistory ? 'History' : 'Pending'} tasks found!</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-bold">No ${isHistory ? 'History' : 'Live'} data found!</td></tr>`;
                     document.getElementById(actionDivId).style.display = 'none';
                     return;
                 }
 
                 document.getElementById(actionDivId).style.display = 'flex';
                 tbody.innerHTML = '';
-                currentSubmissions.forEach(task => {
-                    const isFB = ['fb', 'facebook'].includes(currentTaskType.toLowerCase());
-                    const col1 = isFB ? (task.fbUid || 'N/A') : (task.username || task.generatedEmail || 'N/A');
-                    const cookieShort = task.cookie ? (task.cookie.length > 20 ? task.cookie.substring(0,20)+'...' : task.cookie) : 'N/A';
-                    
-                    tbody.innerHTML += `
-                        <tr class="border-b hover:bg-blue-50">
-                            <td class="p-3 border font-mono text-sm font-bold">${task.taskId}</td>
-                            <td class="p-3 border font-mono">${col1}</td>
-                            <td class="p-3 border font-mono text-red-600">${task.password || 'N/A'}</td>
-                            <td class="p-3 border font-mono text-blue-600">${task.secret2fa || 'N/A'}</td>
-                            <td class="p-3 border text-xs" title="${task.cookie||''}">${cookieShort}</td>
-                            <td class="p-3 border text-xs">${new Date(task.time).toLocaleDateString('en-GB')}</td>
-                        </tr>
-                    `;
+                currentSubmissions.forEach(sub => {
+                    tbody.innerHTML += `<tr class="border-b hover:bg-gray-50 transition">${getRowHTML(sub, selectedTaskObj)}</tr>`;
                 });
-            } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-red-500">Error loading data.</td></tr>'; }
+            } catch(e) { 
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-red-500 font-bold">Error loading data.</td></tr>'; 
+            }
         }
 
-        async function completeToday() {
-            const taskId = document.getElementById('taskSelect').value;
-            if(!taskId || !confirm("Move all these live tasks to History?")) return;
+        // Export to Proper Google Sheet Format (XLSX)
+        function exportToXLSX(isHistory) {
+            if(currentSubmissions.length === 0) return Swal.fire('Oops!', 'No data to export!', 'warning');
             
-            try {
-                const res = await fetch(`${API_URL}/api/moveToHistory`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId })
-                });
-                if((await res.json()).success) { alert("Successfully moved to history!"); loadSubmissions(false); }
-                else alert("Error moving to history.");
-            } catch(e) { alert("Request failed!"); }
-        }
-
-        async function deleteAllHistory() {
-            if(!confirm("Are you sure you want to DELETE ALL history data forever?")) return;
-            try {
-                const res = await fetch(`${API_URL}/api/deleteHistory`, { method: 'POST' });
-                if((await res.json()).success) { alert("History deleted!"); loadSubmissions(true); }
-                else alert("Error deleting history.");
-            } catch(e) { alert("Request failed!"); }
-        }
-
-        async function processBulkAction(action) {
-            const idsRaw = document.getElementById('bulkTaskIds').value;
-            const taskIds = idsRaw.split(/[\n,]+/).map(id => id.trim()).filter(id => id);
+            const isFB = ['fb', 'facebook'].includes(selectedTaskObj.type.toLowerCase());
             
-            if(taskIds.length === 0) return alert("Please paste some Task IDs first!");
-            if(!confirm(`Are you sure you want to ${action.toUpperCase()} ${taskIds.length} tasks?`)) return;
-
-            try {
-                const res = await fetch(`${API_URL}/api/bulkAction`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskIds, action })
-                });
-                const result = await res.json();
-                if(result.success) {
-                    alert(`Successfully processed ${result.processedCount} tasks!`);
-                    document.getElementById('bulkTaskIds').value = '';
-                } else alert("Error: " + result.message);
-            } catch(e) { alert("Request failed!"); }
-        }
-
-        function exportToCSV(isHistory) {
-            if(currentSubmissions.length === 0) return alert("No data to export!");
-            const isFB = ['fb', 'facebook'].includes(currentTaskType.toLowerCase());
-            
-            let header = isFB ? "UID,Password,2FA,Cookies,Task ID\n" : "Username,Password,2FA,Cookies,Task ID\n";
-            let csv = header;
-
-            currentSubmissions.forEach(t => {
-                let col1 = isFB ? (t.fbUid || 'N/A') : (t.username || t.generatedEmail || 'N/A');
-                csv += `"${col1}","${t.password || 'N/A'}","${t.secret2fa || 'N/A'}","${t.cookie || 'N/A'}","${t.taskId}"\n`;
+            // Build Array for SheetJS matching strict columns requirement
+            const exportData = currentSubmissions.map(sub => {
+                let row = {};
+                if (isFB) row['UID'] = sub.fbUid || sub.username || sub.generatedEmail || 'N/A';
+                else row['Username'] = sub.username || sub.generatedEmail || sub.fbUid || 'N/A';
+                
+                row['Password'] = sub.password || 'N/A';
+                if (selectedTaskObj.is2FA) row['2FA'] = sub.secret2fa || 'N/A';
+                if (selectedTaskObj.isCookie) row['Cookies'] = sub.cookie || 'N/A';
+                row['Task ID'] = sub.taskId;
+                return row;
             });
 
-            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `${isHistory ? 'History' : 'Live'}_Tasks.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Determine Headers Array to enforce strict column order
+            let headers = [isFB ? 'UID' : 'Username', 'Password'];
+            if (selectedTaskObj.is2FA) headers.push('2FA');
+            if (selectedTaskObj.isCookie) headers.push('Cookies');
+            headers.push('Task ID');
+
+            const ws = XLSX.utils.json_to_sheet(exportData, { header: headers });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+            
+            let fileName = `${isHistory ? 'History' : 'Live'}_${selectedTaskObj.name.replace(/\s+/g, '_')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            
+            Swal.fire('Success!', 'Google Sheet Downloaded Successfully!', 'success');
+        }
+
+        // Complete Today Logic
+        async function completeToday() {
+            const taskId = document.getElementById('liveTaskSelect').value;
+            
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "Move all these live tasks to History and clear the board?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, Complete Today!'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        const res = await fetch(`${API_URL}/api/moveToHistory`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId })
+                        });
+                        if((await res.json()).success) { 
+                            Swal.fire('Completed!', 'Tasks moved to history.', 'success'); 
+                            loadSubmissions(false); 
+                        } else throw new Error();
+                    } catch(e) { Swal.fire('Error', 'Request failed!', 'error'); }
+                }
+            });
+        }
+
+        // Delete All History Logic
+        async function deleteAllHistory() {
+            Swal.fire({
+                title: 'Delete ALL History?',
+                text: "This will permanently delete all sheets from history. You won't be able to revert this!",
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        const res = await fetch(`${API_URL}/api/deleteHistory`, { method: 'POST' });
+                        if((await res.json()).success) { 
+                            Swal.fire('Deleted!', 'All history has been cleared.', 'success'); 
+                            loadSubmissions(true); 
+                        } else throw new Error();
+                    } catch(e) { Swal.fire('Error', 'Request failed!', 'error'); }
+                }
+            });
+        }
+
+        // Bulk Approve/Reject Logic
+        async function processBulkAction(action) {
+            const boxId = action === 'approved' ? 'approveIds' : 'rejectIds';
+            const idsRaw = document.getElementById(boxId).value;
+            const taskIds = idsRaw.split(/[\n,]+/).map(id => id.trim()).filter(id => id);
+            
+            if(taskIds.length === 0) return Swal.fire('Oops!', 'Please paste some Task IDs first.', 'warning');
+            
+            const actionName = action === 'approved' ? 'Approve' : 'Reject';
+            
+            Swal.fire({
+                title: `${actionName} Tasks?`,
+                text: `You are about to ${actionName.toLowerCase()} ${taskIds.length} tasks.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: action === 'approved' ? '#10b981' : '#ef4444',
+                confirmButtonText: `Yes, ${actionName}`
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        Swal.fire({ title: 'Processing...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
+                        
+                        const res = await fetch(`${API_URL}/api/bulkAction`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ taskIds, action })
+                        });
+                        const result = await res.json();
+                        
+                        if(result.success) {
+                            Swal.fire('Done!', `Successfully processed ${result.processedCount} tasks!`, 'success');
+                            document.getElementById(boxId).value = '';
+                        } else Swal.fire('Error', result.message, 'error');
+                    } catch(e) { Swal.fire('Error', 'Request failed!', 'error'); }
+                }
+            });
         }
     </script>
 </body>
