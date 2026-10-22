@@ -5,7 +5,7 @@ const { faker } = require('@faker-js/faker');
 const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
-const cors = require('cors'); // ওয়েবসাইটের সাথে কানেক্ট করার জন্য
+const cors = require('cors');
 
 // ==========================================
 // Anti-Crash System
@@ -47,6 +47,7 @@ const SubmissionSchema = new mongoose.Schema({
     password: String, fbUid: String, secret2fa: String, cookie: String, recoveryMail: String,
     submittedBy: String, uid: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, price: Number,
     status: { type: String, default: 'pending' }, tgNotified: { type: Boolean, default: false },
+    inHistory: { type: Boolean, default: false }, // History Identify করার জন্য
     time: { type: Date, default: Date.now }
 });
 const Submission = mongoose.model('Submission', SubmissionSchema);
@@ -308,7 +309,7 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
             const tData = ctx.scene.session.taskData; const fUser = ctx.scene.session.fakeUser; const col = ctx.scene.session.collected; const uId = ctx.scene.session.userId;
             const generatedTaskId = "WP-" + Math.floor(10000 + Math.random() * 90000);
             try {
-                const sub = new Submission({ taskId: generatedTaskId, activeTaskId: tData._id.toString(), taskName: tData.name, taskType: tData.type, username: fUser.username || "", firstName: fUser.firstName || "", lastName: fUser.lastName || "", fullName: `${fUser.firstName}${fUser.lastName}`, generatedEmail: fUser.email || "", password: tData.password || "Taskesy123@", fbUid: col.uid || "", secret2fa: col.secret2fa || "", cookie: col.cookie || "", recoveryMail: tData.recoveryMail || "", submittedBy: ctx.from.id.toString(), uid: uId, price: tData.price });
+                const sub = new Submission({ taskId: generatedTaskId, activeTaskId: tData._id.toString(), taskName: tData.name, taskType: tData.type, username: fUser.username || "", firstName: fUser.firstName || "", lastName: fUser.lastName || "", fullName: `${fUser.firstName}${fUser.lastName}`, generatedEmail: fUser.email || "", password: tData.password || "Taskesy123@", fbUid: col.uid || "", secret2fa: col.secret2fa || "", cookie: col.cookie || "", recoveryMail: tData.recoveryMail || "", submittedBy: ctx.from.id.toString(), uid: uId, price: tData.price, inHistory: false });
                 await sub.save(); await User.findByIdAndUpdate(uId, { $inc: { pending: 1 } });
                 if (ctx.scene.session.taskMessageId) ctx.telegram.deleteMessage(ctx.chat.id, ctx.scene.session.taskMessageId).catch(()=>{});
                 ctx.reply(langDB[lang].task_success, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) });
@@ -575,7 +576,7 @@ bot.action(/WITHDRAW_(.+)/, async (ctx) => ctx.scene.enter('WITHDRAW_WIZARD', { 
 function getAdminMenu() {
     return { inline_keyboard: [
         [{ text: '📊 Dashboard Stats', callback_data: 'ADMIN_STATS', style: 'primary' }, { text: '⚙️ Settings', callback_data: 'ADMIN_SETTINGS', style: 'primary' }],
-        [{ text: '🛠️ Task Manage', callback_data: 'ADMIN_TASK_MANAGE_MENU', style: 'success' }, { text: '📋 View Tasks (Export)', callback_data: 'ADMIN_VIEW_TASKS', style: 'success' }],
+        [{ text: '🛠️ Task Manage', callback_data: 'ADMIN_TASK_MANAGE_MENU', style: 'success' }, { text: '📋 View Tasks', callback_data: 'ADMIN_VIEW_TASKS', style: 'success' }],
         [{ text: '💸 Review Withdrawals', callback_data: 'ADMIN_PENDING_WDS', style: 'primary' }, { text: '📢 Broadcast', callback_data: 'ADMIN_BROADCAST', style: 'primary' }],
         [{ text: `👑 Admin ID: ${process.env.ADMIN_ID}`, callback_data: 'ADMIN_INFO', style: 'danger' }]
     ]};
@@ -598,7 +599,6 @@ bot.action('ADMIN_STATS', async (ctx) => {
     await ctx.editMessageText(`📊 **ড্যাশবোর্ড স্ট্যাটাস**\n━━━━━━━━━━━━━\n👥 মোট ইউজার: ${users} জন\n⏳ পেন্ডিং টাস্ক: ${tasks} টি\n💸 পেন্ডিং উইথড্র: ${wds} টি`, { parse_mode: 'Markdown', reply_markup: getAdminMenu() });
 });
 
-// Admin Settings
 bot.action('ADMIN_SETTINGS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const botStatus = await getSetting('botStatus', 'on');
@@ -625,7 +625,6 @@ bot.action(/SET_(botStatus|taskStatus|maintenance)_(on|off)/, async (ctx) => {
 });
 bot.action('SET_REF_COMMISSION', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_REF_COMM_WIZARD'); });
 
-// Task Manage Menu
 bot.action('ADMIN_TASK_MANAGE_MENU', (ctx) => {
     if (!checkAdmin(ctx)) return;
     ctx.editMessageText('🛠️ **Task Manage**\nকী করতে চান?', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
@@ -670,73 +669,96 @@ bot.action(/ADMIN_ET_DEL_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_LIVE_TASKS', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// View Tasks (Export Custom Text CSV Feature without any external dependencies)
+// View Tasks (API based logic)
 bot.action('ADMIN_VIEW_TASKS', async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const tasks = await Task.find({ status: 'active' });
     if (tasks.length === 0) return ctx.answerCbQuery('কোনো লাইভ টাস্ক নেই!', { show_alert: true });
     let btns = tasks.map(t => [{ text: `📋 ${t.name}`, callback_data: `ADMIN_VTM_${t._id}`, style: 'primary' }]); 
     btns.push([{ text: '🔙 Back', callback_data: 'ADMIN_MAIN', style: 'danger' }]);
-    ctx.editMessageText('📋 **কোন টাস্কের ডাটা ডাউনলোড করতে চান তা সিলেক্ট করুন:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
+    ctx.editMessageText('📋 **কোন টাস্কের ডাটা দেখতে চান তা সিলেক্ট করুন:**', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: btns } });
 });
 
 bot.action(/ADMIN_VTM_(.+)/, async (ctx) => {
     if (!checkAdmin(ctx)) return;
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্ক পাওয়া যায়নি!');
-    const pendingCount = await Submission.countDocuments({ activeTaskId: task._id.toString(), status: 'pending' });
+    const pendingCount = await Submission.countDocuments({ activeTaskId: task._id.toString(), status: 'pending', inHistory: { $ne: true } });
 
-    ctx.editMessageText(`📋 **View Task:** ${task.name}\n━━━━━━━━━━━━━\n⏳ **Pending Submissions:** \`${pendingCount}\` টি\n\n🌐 *রিপোর্ট চেক এবং ডাটা ডাউনলোড করতে আপনার অ্যাডমিন ওয়েবসাইট ভিজিট করুন।*`, {
+    ctx.editMessageText(`📋 **View Task:** ${task.name}\n━━━━━━━━━━━━━\n⏳ **Live Pending Submissions:** \`${pendingCount}\` টি\n\n🌐 *রিপোর্ট চেক এবং ডাটা ডাউনলোড করতে আপনার GitHub Pages অ্যাডমিন ওয়েবসাইট ভিজিট করুন।*`, {
         parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '🔙 Back', callback_data: 'ADMIN_VIEW_TASKS', style: 'danger' }]
-            ]
-        }
+        reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'ADMIN_VIEW_TASKS', style: 'danger' }]] }
     });
 });
 
-// API Endpoints for the Web Panel
+// ==========================================
+// Web UI APIs (Express)
+// ==========================================
 const app = express(); 
 app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => res.send('Taskesy PRO Bot with Secure API is Active!'));
 
-app.get('/api/pending', async (req, res) => {
+app.get('/api/tasks', async (req, res) => {
     try {
-        const submissions = await Submission.find({ status: 'pending' }).populate('uid', 'telegramId name').sort({ time: -1 });
+        const tasks = await Task.find({ status: 'active' });
+        res.json(tasks);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.get('/api/submissions/:taskId', async (req, res) => {
+    const { taskId } = req.params;
+    const history = req.query.history === 'true';
+    try {
+        const submissions = await Submission.find({ activeTaskId: taskId, status: 'pending', inHistory: history }).populate('uid', 'telegramId name').sort({ time: -1 });
         res.json(submissions);
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/action', async (req, res) => {
-    const { id, action } = req.body; 
+app.post('/api/moveToHistory', async (req, res) => {
+    const { taskId } = req.body;
     try {
-        const sub = await Submission.findById(id).populate('uid');
-        if(!sub || sub.status !== 'pending') return res.json({ success: false, message: 'Not found or already processed' });
-
-        sub.status = action;
-        await sub.save();
-
-        if(action === 'approved') {
-            await User.findByIdAndUpdate(sub.uid._id, { $inc: { earned: sub.price, approved: 1, pending: -1 } });
-            
-            // Check Ref Commission
-            if (sub.uid.referrerId) {
-                const refCommStr = await getSetting('refCommission', '0');
-                const commissionPct = parseFloat(refCommStr);
-                if (commissionPct > 0) {
-                    const commAmount = (sub.price * commissionPct) / 100;
-                    await User.findByIdAndUpdate(sub.uid.referrerId, { $inc: { earned: commAmount, refEarn: commAmount } });
-                }
-            }
-            // Send Notif
-            bot.telegram.sendMessage(sub.uid.telegramId, `✅ **টাস্ক অপ্প্রভড!**\nআপনার টাস্কটি (ID: \`${sub.taskId}\`) সফলভাবে গ্রহণ করা হয়েছে।\n💰 আপনার ব্যালেন্সে **৳${sub.price}** অ্যাড হয়েছে।`, { parse_mode: 'Markdown' }).catch(()=>{});
-        } else {
-            await User.findByIdAndUpdate(sub.uid._id, { $inc: { rejected: 1, pending: -1 } });
-            bot.telegram.sendMessage(sub.uid.telegramId, `❌ **টাস্ক রিজেক্টেড!**\nআপনার সাবমিট করা টাস্কটি (ID: \`${sub.taskId}\`) বাতিল করা হয়েছে।\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **কারণ:** Rejected for Blocked / Invalid Data.`, { parse_mode: 'Markdown' }).catch(()=>{});
-        }
+        await Submission.updateMany({ activeTaskId: taskId, status: 'pending', inHistory: { $ne: true } }, { inHistory: true });
         res.json({ success: true });
+    } catch(e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/deleteHistory', async (req, res) => {
+    try {
+        await Submission.deleteMany({ inHistory: true, status: 'pending' });
+        res.json({ success: true });
+    } catch(e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/bulkAction', async (req, res) => {
+    const { taskIds, action } = req.body; 
+    try {
+        const submissions = await Submission.find({ taskId: { $in: taskIds }, status: 'pending' }).populate('uid');
+        if(submissions.length === 0) return res.json({ success: false, message: 'No valid pending tasks found for the provided IDs.' });
+
+        let processedCount = 0;
+        for (const sub of submissions) {
+            sub.status = action;
+            await sub.save();
+
+            if(action === 'approved') {
+                await User.findByIdAndUpdate(sub.uid._id, { $inc: { earned: sub.price, approved: 1, pending: -1 } });
+                if (sub.uid.referrerId) {
+                    const refCommStr = await getSetting('refCommission', '0');
+                    const commissionPct = parseFloat(refCommStr);
+                    if (commissionPct > 0) {
+                        const commAmount = (sub.price * commissionPct) / 100;
+                        await User.findByIdAndUpdate(sub.uid.referrerId, { $inc: { earned: commAmount, refEarn: commAmount } });
+                    }
+                }
+                bot.telegram.sendMessage(sub.uid.telegramId, `✅ **টাস্ক অপ্প্রভড!**\nআপনার টাস্কটি (ID: \`${sub.taskId}\`) সফলভাবে গ্রহণ করা হয়েছে।\n💰 আপনার ব্যালেন্সে **৳${sub.price}** অ্যাড হয়েছে।`, { parse_mode: 'Markdown' }).catch(()=>{});
+            } else {
+                await User.findByIdAndUpdate(sub.uid._id, { $inc: { rejected: 1, pending: -1 } });
+                bot.telegram.sendMessage(sub.uid.telegramId, `❌ **টাস্ক রিজেক্টেড!**\nআপনার সাবমিট করা টাস্কটি (ID: \`${sub.taskId}\`) বাতিল করা হয়েছে।\n\n🆔 **Username / Email:** \`${sub.username || sub.generatedEmail}\`\n⚠️ **কারণ:** Rejected for Blocked / Invalid Data.`, { parse_mode: 'Markdown' }).catch(()=>{});
+            }
+            processedCount++;
+        }
+        res.json({ success: true, processedCount });
     } catch(e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -769,7 +791,7 @@ bot.action(/ADMIN_REJ_WD_(.+)/, async (ctx) => {
 bot.action('ADMIN_BROADCAST', (ctx) => { if (checkAdmin(ctx)) ctx.scene.enter('ADMIN_BROADCAST_WIZARD'); });
 
 // ==========================================
-// ৯. Real-Time Notifications (Withdrawals Only)
+// ১০. Real-Time Notifications (Withdrawals Only)
 // ==========================================
 setInterval(async () => {
     try {
@@ -785,6 +807,6 @@ setInterval(async () => {
 }, 10000);
 
 app.listen(process.env.PORT || 3000, () => console.log(`Server listening on port ${process.env.PORT || 3000}!`));
-bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Website API!')); 
+bot.launch().then(() => console.log('Taskesy PRO Bot is Running with External Website API!')); 
 process.once('SIGINT', () => bot.stop('SIGINT')); 
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
