@@ -10,7 +10,7 @@ const path = require('path');
 const os = require('os');
 
 // ==========================================
-// Anti-Crash System
+// Anti-Crash & Keep-Alive System
 // ==========================================
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -137,7 +137,7 @@ const langDB = {
         task_expired: '⏳ 10 minutes time limit exceeded. Task auto-cancelled.',
         wrong_cookie: '❌ Wrong cookies! Please submit valid Cookies:',
         wrong_2fa: '❌ Wrong 2FA secret! Please submit a valid 2FA:',
-        wrong_uid: '❌ Wrong UID! Please submit a valid Facebook UID:',
+        wrong_uid: '❌ Wrong Wrong UID! Please submit a valid Facebook UID:',
         acc_cookie: '✅ Cookies Accepted!',
         acc_2fa: () => `✅ 2FA Accepted!\nYour OTP for login:`,
         acc_uid: '✅ UID Accepted!',
@@ -182,7 +182,6 @@ bot.use(async (ctx, next) => {
     const telegramId = ctx.from?.id?.toString();
     const isAdmin = checkAdmin(ctx);
     
-    // Ban Check
     if (telegramId && !isAdmin) {
         const u = await User.findOne({ telegramId });
         if (u && u.isBanned) {
@@ -231,7 +230,7 @@ async function showTasks(ctx) {
     const lang = await getLang(ctx);
     const tasks = await Task.find({ status: 'active' });
     if (tasks.length === 0) return ctx.reply(langDB[lang].no_tasks);
-    let buttons = tasks.map(t => [{ text: `⚡ ${t.name} -${t.price} USDT`, callback_data: `VIEW_TASK_${t._id}`, style: 'primary' }]);
+    let buttons = tasks.map(t => [{ text: `⚡ ${t.name} - ${t.price} USDT`, callback_data: `VIEW_TASK_${t._id}`, style: 'primary' }]);
     ctx.reply(langDB[lang].select_task, { reply_markup: { inline_keyboard: buttons } });
 }
 
@@ -321,7 +320,7 @@ const taskWizard = new Scenes.WizardScene('TASK_WIZARD',
             const tData = ctx.scene.session.taskData; const fUser = ctx.scene.session.fakeUser; const col = ctx.scene.session.collected; const uId = ctx.scene.session.userId;
             const generatedTaskId = "WP-" + Math.floor(10000 + Math.random() * 90000);
             try {
-                const sub = new Submission({ taskId: generatedTaskId, activeTaskId: tData._id.toString(), taskName: tData.name, taskType: tData.type, username: fUser.username || "", firstName: fUser.firstName || "", lastName: fUser.lastName || "", fullName: `${fUser.firstName}${fUser.lastName}`, generatedEmail: fUser.email || "", password: tData.password || "Taskesy123@", fbUid: col.uid || "", secret2fa: col.secret2fa || "", cookie: col.cookie || "", recoveryMail: tData.recoveryMail || "", submittedBy: ctx.from.id.toString(), uid: uId, price: tData.price, inHistory: false });
+                const sub = new Submission({ taskId: generatedTaskId, activeTaskId: tData._id.toString(), taskName: tData.name, taskType: tData.type, username: fUser.username || "", firstName: fUser.firstName || "", lastName: fUser.lastName || "", fullName: `${fUser.firstName} ${fUser.lastName}`, generatedEmail: fUser.email || "", password: tData.password || "Taskesy123@", fbUid: col.uid || "", secret2fa: col.secret2fa || "", cookie: col.cookie || "", recoveryMail: tData.recoveryMail || "", submittedBy: ctx.from.id.toString(), uid: uId, price: tData.price, inHistory: false });
                 await sub.save(); await User.findByIdAndUpdate(uId, { $inc: { pending: 1 } });
                 if (ctx.scene.session.taskMessageId) ctx.telegram.deleteMessage(ctx.chat.id, ctx.scene.session.taskMessageId).catch(()=>{});
                 ctx.reply(langDB[lang].task_success, { reply_markup: getMainMenu(lang, checkAdmin(ctx)) });
@@ -583,21 +582,31 @@ const stage = new Scenes.Stage([taskWizard, withdrawWizard, adminBroadcastWizard
 bot.use(stage.middleware());
 
 // ==========================================
-// ৭. User Handlers
+// ৭. User Handlers - CRASH PROOF REGISTER
 // ==========================================
 async function registerUser(ctx) {
+    if (!ctx.from) return;
     const telegramId = ctx.from.id.toString(); 
     try {
         const existing = await User.findOne({ telegramId });
         if (!existing) {
-            let referrerId = null; let payload = null; try { payload = await redis.get(`ref_${telegramId}`); } catch(e){}
+            let referrerId = null; let payload = null; 
+            try { payload = await redis.get(`ref_${telegramId}`); } catch(e){}
             if (payload && payload !== telegramId) { 
                 const refUser = await User.findOne({ telegramId: payload }); 
-                if (refUser) { referrerId = refUser._id; await User.findByIdAndUpdate(referrerId, { $inc: { refCount: 1 } }); bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(()=>{}); } 
+                if (refUser) { 
+                    referrerId = refUser._id; 
+                    await User.findByIdAndUpdate(referrerId, { $inc: { refCount: 1 } }); 
+                    bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(()=>{}); 
+                } 
             }
-            await new User({ telegramId, name: ctx.from.first_name, shortRefId: Math.random().toString(36).substring(2, 8).toUpperCase(), referrerId, joinDate: new Date().toLocaleDateString('en-GB') }).save();
+            // 100% Unique ShortID Generator
+            const newShortId = Math.random().toString(36).substring(2, 8).toUpperCase() + Math.floor(Math.random() * 1000);
+            await new User({ telegramId, name: ctx.from.first_name, shortRefId: newShortId, referrerId, joinDate: new Date().toLocaleDateString('en-GB') }).save();
         }
-    } catch(err) { if (err.code !== 11000) console.error(err); }
+    } catch(err) {
+        if (err.code !== 11000) console.error("Register Error:", err);
+    }
 }
 
 bot.action('check_join', async (ctx) => {
@@ -628,6 +637,7 @@ bot.hears([langDB.bn.menu_lang, langDB.en.menu_lang], (ctx) => { ctx.reply('🌐
 bot.action(/VIEW_TASK_(.+)/, async (ctx) => {
     const taskStatus = await getSetting('taskStatus', 'on');
     if (taskStatus === 'off' && !checkAdmin(ctx)) return ctx.answerCbQuery('⚠️ Currently task submission is disabled.', { show_alert: true });
+
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্কটি পাওয়া যায়নি!');
     const lang = await getLang(ctx); const rules = task.rules || (lang === 'bn' ? 'উপরের নিয়মগুলো মেনে কাজ করুন। নিয়ম না মানলে রিপোর্ট বাতিল করা হবে ❌' : 'Follow the rules given above and work. If you do not follow the rules, the report will be rejected ❌');
     await ctx.deleteMessage().catch(()=>{}); await ctx.reply(langDB[lang].task_intro(task.name, task.price, rules), { reply_markup: { inline_keyboard: [[{ text: langDB[lang].start_btn, callback_data: `START_TASK_${task._id}`, style: 'success' }]] } });
@@ -636,6 +646,7 @@ bot.action(/VIEW_TASK_(.+)/, async (ctx) => {
 bot.action(/START_TASK_(.+)/, async (ctx) => {
     const taskStatus = await getSetting('taskStatus', 'on');
     if (taskStatus === 'off' && !checkAdmin(ctx)) return ctx.answerCbQuery('⚠️ Currently task submission is disabled.', { show_alert: true });
+
     const task = await Task.findById(ctx.match[1]); if (!task) return ctx.answerCbQuery('টাস্কটি পাওয়া যায়নি!');
     const u = await User.findOne({ telegramId: ctx.from.id.toString() }); if(!u) return ctx.answerCbQuery('ইউজার ডাটাবেসে নেই!');
     
@@ -739,7 +750,7 @@ bot.action(/ADMIN_DEL_M_(.+)/, async (ctx) => {
     bot.handleUpdate({ callback_query: { data: 'ADMIN_DEL_METHOD_MENU', message: ctx.callbackQuery.message, from: ctx.from } });
 });
 
-// User Manage (CSV Removed per request)
+// User Manage
 bot.action('ADMIN_USER_MANAGE', (ctx) => {
     if (!checkAdmin(ctx)) return;
     ctx.editMessageText('👥 **User Manage**\nকী করতে চান?', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
@@ -914,8 +925,13 @@ app.post('/api/bulkAction', async (req, res) => {
 });
 
 // ==========================================
-// ৯. Real-Time Notifications (Withdrawals Only)
+// ৯. Global Catch & Real-Time Notifications
 // ==========================================
+
+bot.catch((err, ctx) => {
+    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
+});
+
 setInterval(async () => {
     try {
         const withdrawals = await Withdrawal.find({ status: { $in: ['approved', 'rejected'] }, tgNotified: false }).populate('uid');
@@ -930,6 +946,9 @@ setInterval(async () => {
 }, 10000);
 
 app.listen(process.env.PORT || 3000, () => console.log(`Server listening on port ${process.env.PORT || 3000}!`));
-bot.launch().then(() => console.log('Taskesy PRO Bot is Running with Website API!')); 
+
+// Launch with dropPendingUpdates to prevent crash on waking up
+bot.launch({ dropPendingUpdates: true }).then(() => console.log('Taskesy PRO Bot is Running Smoothly!')); 
+
 process.once('SIGINT', () => bot.stop('SIGINT')); 
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
