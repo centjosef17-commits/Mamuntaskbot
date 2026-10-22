@@ -6,6 +6,8 @@ const express = require('express');
 const OTPAuth = require('otpauth');
 const Redis = require('ioredis');
 const cors = require('cors');
+const xlsx = require('xlsx');
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
@@ -137,7 +139,7 @@ const langDB = {
         task_expired: '⏳ 10 minutes time limit exceeded. Task auto-cancelled.',
         wrong_cookie: '❌ Wrong cookies! Please submit valid Cookies:',
         wrong_2fa: '❌ Wrong 2FA secret! Please submit a valid 2FA:',
-        wrong_uid: '❌ Wrong Wrong UID! Please submit a valid Facebook UID:',
+        wrong_uid: '❌ Wrong UID! Please submit a valid Facebook UID:',
         acc_cookie: '✅ Cookies Accepted!',
         acc_2fa: () => `✅ 2FA Accepted!\nYour OTP for login:`,
         acc_uid: '✅ UID Accepted!',
@@ -582,7 +584,7 @@ const stage = new Scenes.Stage([taskWizard, withdrawWizard, adminBroadcastWizard
 bot.use(stage.middleware());
 
 // ==========================================
-// ৭. User Handlers - CRASH PROOF REGISTER
+// ৭. User Handlers
 // ==========================================
 async function registerUser(ctx) {
     if (!ctx.from) return;
@@ -600,7 +602,6 @@ async function registerUser(ctx) {
                     bot.telegram.sendMessage(refUser.telegramId, `🎉 You have successfully invited a User: **${ctx.from.first_name}**`, { parse_mode: 'Markdown' }).catch(()=>{}); 
                 } 
             }
-            // 100% Unique ShortID Generator
             const newShortId = Math.random().toString(36).substring(2, 8).toUpperCase() + Math.floor(Math.random() * 1000);
             await new User({ telegramId, name: ctx.from.first_name, shortRefId: newShortId, referrerId, joinDate: new Date().toLocaleDateString('en-GB') }).save();
         }
@@ -950,5 +951,5 @@ app.listen(process.env.PORT || 3000, () => console.log(`Server listening on port
 // Launch with dropPendingUpdates to prevent crash on waking up
 bot.launch({ dropPendingUpdates: true }).then(() => console.log('Taskesy PRO Bot is Running Smoothly!')); 
 
-process.once('SIGINT', () => bot.stop('SIGINT')); 
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => { try { bot.stop('SIGINT'); } catch(e) {} });
+process.once('SIGTERM', () => { try { bot.stop('SIGTERM'); } catch(e) {} });
